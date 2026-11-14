@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import MonthQuality from './MonthQuality.jsx';
 import { qualityLabel, comparisonBlocked } from './provenance.js';
+import SectionNav from './SectionNav.jsx';
+import SeasonComparison from './SeasonComparison.jsx';
 import RegionMap from './Map.jsx';
 import SensorChart from './SensorChart.jsx';
 import MethodPanel from './MethodPanel.jsx';
@@ -42,6 +44,8 @@ export default function App() {
   const [validation, setValidation] = useState(null);
   const [area, setArea] = useState(null), [areaLoading, setAreaLoading] = useState(true), [areaError, setAreaError] = useState('');
   const [daytime, setDaytime] = useState(null), [dayLoading, setDayLoading] = useState(true), [dayError, setDayError] = useState('');
+  const [exploreView, setExploreView] = useState('calendar');
+  const [seasonNight, setSeasonNight] = useState(null), [seasonLoading, setSeasonLoading] = useState(true), [seasonError, setSeasonError] = useState('');
   const [hoveredMonth, setHoveredMonth] = useState('');
   const metric = mode === 'harmonized' ? 'harmonized' : sensor;
   const query = useMemo(() => new URLSearchParams({ bbox: bounds.join(','), start, end, daynight: period }), [bounds, start, end, period]);
@@ -107,6 +111,17 @@ export default function App() {
     return () => controller.abort();
   }, [meta, bounds, retry]);
 
+  useEffect(() => {
+    if (exploreView !== 'seasons' || period !== 'N' || !meta?.start || !meta?.end) return;
+    const controller = new AbortController();
+    setSeasonNight(null); setSeasonLoading(true); setSeasonError('');
+    const params = new URLSearchParams({ bbox: bounds.join(','), start: meta.start, end: meta.end, daynight: 'N' });
+    getJSON(`/series?${params}`, controller.signal).then(setSeasonNight).catch(err => {
+      if (err.name !== 'AbortError') setSeasonError(err.message);
+    }).finally(() => { if (!controller.signal.aborted) setSeasonLoading(false); });
+    return () => controller.abort();
+  }, [exploreView, period, meta, bounds, retry]);
+
   const applyBounds = values => { setBounds(values); setInputs(values.map(String)); setFormError(''); };
   const rows = series?.data || [];
   const noData = series?.has_data === false;
@@ -142,8 +157,8 @@ export default function App() {
     <header className="topbar"><div className="brand"><span className="brand-icon" aria-hidden="true">◉</span><div>HOTSPOT <strong>OBSERVATORY</strong><small>Harmonized satellite fire history</small></div></div></header>
     {synthetic && <div className="synthetic-banner" role="status"><strong>◈ SYNTHETIC DATA</strong><span>Invented demonstration values. Not NASA observations. Not for scientific use.</span></div>}
     <main className="four-section-page">
-      <div className="page-heading"><div><h1>Two satellites. One clearer fire history.</h1><p className="hero-subhead">MODIS and VIIRS have observed Earth's fires for decades, but their measurements aren't directly comparable. Hotspot Observatory bridges those differences to reveal historical burning patterns across Argentina from 2003 to 2026.</p><p className="hero-note">Activity is measured in active cell-days, not individual fires or burned area.</p></div></div>
-      <nav className="section-nav" aria-label="On this page"><a href="#where">01 Select a study area</a><a href="#satellites">02 Compare satellites</a><a href="#history">03 Understand harmonization</a><a href="#explore">04 Explore fire history</a></nav>
+      <div className="page-heading"><div><h1>Two satellites. One clearer fire history.</h1><p className="hero-subhead">MODIS and VIIRS have observed Earth's fires for decades, but their measurements aren't directly comparable. Hotspot Observatory bridges those differences to reveal historical burning patterns across Argentina from 2003 to 2026.</p><details className="measurement-explanation"><summary>How is activity measured?</summary><p>Argentina is divided into 0.1° geographic grid cells. Each cell with at least one hotspot detection on a day contributes one active cell-day. The same cell can count again on another day. This measures satellite-detected activity, not unique fires or burned area.</p></details></div></div>
+      <SectionNav/>
       {error && <div className="error" role="alert">{error} <button onClick={() => setRetry(v => v + 1)}>Retry</button></div>}
       <section id="where" className="page-section" aria-labelledby="where-title">
         <div className="page-section-heading"><span>01</span><h2 id="where-title">Choose your study area.</h2><p>Select a region or define your own area to explore NASA satellite observations.</p></div>
@@ -177,6 +192,9 @@ export default function App() {
       </section>
       <section id="explore" className="page-section explore-section" aria-labelledby="explore-title">
         <div className="page-section-heading"><span>04</span><h2 id="explore-title">Explore Fire History</h2><p>Select a month to inspect its harmonized history.</p></div>
+        <div className="mode-toggle explore-view-toggle" aria-label="History view"><button aria-pressed={exploreView === 'calendar'} className={exploreView === 'calendar' ? 'selected' : ''} onClick={() => setExploreView('calendar')}>Fire calendar</button><button aria-pressed={exploreView === 'seasons'} className={exploreView === 'seasons' ? 'selected' : ''} onClick={() => setExploreView('seasons')}>Compare seasons</button></div>
+        {exploreView === 'seasons' && <SeasonComparison series={period === 'D' ? daytime : seasonNight} loading={period === 'D' ? dayLoading : seasonLoading} error={period === 'D' ? dayError : seasonError} start={meta?.start} end={latestMonth} regionName={regionName} period={period} onPeriodChange={setPeriod}/>}
+        <div className="calendar-view" hidden={exploreView !== 'calendar'}>
           <section className="panel observation-controls"><h3>Observation window</h3>
             <div className="date-grid"><label>From<input type="month" aria-label="Start month" value={start} onChange={event => setStart(event.target.value)} /></label><label>To<input type="month" aria-label="End month" max={meta?.end} value={end} onChange={event => setEnd(event.target.value)} /></label></div>
             <div className="filter-grid"><label>Acquisition<select value={period} onChange={event => setPeriod(event.target.value)} aria-label="Day or night"><option value="D">Daytime</option><option value="N">Nighttime</option></select></label>
@@ -228,6 +246,7 @@ export default function App() {
         </div>
         <AreaSummary data={area} loading={areaLoading} error={areaError}/>
         <div className="csv-row"><div><h3>Take the selected series with you</h3><p>Monthly {LABELS[metric]} · active cell-days · includes source, NRT, missing-day and interval columns</p></div><button className="export" title={`Export ${LABELS[metric]} in active cell-days`} onClick={download} disabled={!series || loading || downloading}>↓ {downloading ? 'Preparing…' : 'Download CSV'}</button></div>
+        </div>
       </section>
       <footer><span>0.1° GRID · WGS84 · UTC</span><span>Calibration: {meta?.calibration || 'loading'}{synthetic ? ' · Synthetic demonstration' : ''}</span></footer>
     </main>

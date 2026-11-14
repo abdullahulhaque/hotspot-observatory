@@ -205,3 +205,21 @@ activity even when exporting a raw metric. No endpoints are invented in real mod
 The integration tests require the regenerated production files and check the
 finalized October 2026 coverage. App-owned current-contract fixtures are generated
 in pytest temporary directories; the scientific fixture and outputs are untouched.
+
+## Seasonal comparison
+
+Explore switches between the existing Fire calendar and Compare seasons. Seasonal
+bars sum three harmonized months for the shared region and chosen day/night period,
+using the full record rather than the calendar's date or raw-sensor filters.
+Summer is named for its December year (December 2025–February 2026 = Summer 2025–26).
+The last 3, 5 or 10 complete seasons define the displayed median, including the
+selected season when complete. Incomplete seasons within that span are additional
+grey bars with explicitly partial totals, excluded from comparisons. Null or absent
+months, incomplete harmonized coverage, and unavailable quality metadata make a
+season incomplete. Missing months are never filled with zero; future seasons are
+not created. Source, gap, NRT and missing-day information stays visible in each
+monthly breakdown. No seasonal prediction interval or regional validation is inferred.
+
+Navigation highlights the section at the upper viewport and defaults to Section 01.
+Anchor links scroll smoothly, respecting the reduced-motion preference. The hero's
+measurement explanation is available through a keyboard-accessible disclosure.

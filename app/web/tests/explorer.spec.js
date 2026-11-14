@@ -197,7 +197,11 @@ test('study-area introduction, responsive map and metadata dates', async ({page}
   await expect(page.locator('header')).not.toContainText('Selected area');
   await expect(page.getByRole('heading',{level:1})).toHaveText('Two satellites. One clearer fire history.');
   await expect(page.locator('.hero-subhead')).toHaveText("MODIS and VIIRS have observed Earth's fires for decades, but their measurements aren't directly comparable. Hotspot Observatory bridges those differences to reveal historical burning patterns across Argentina from 2003 to 2026.");
-  await expect(page.locator('.hero-note')).toHaveText('Activity is measured in active cell-days, not individual fires or burned area.');
+  await expect(page.locator('.measurement-explanation p')).not.toBeVisible();
+  await page.getByText('How is activity measured?', {exact:true}).click();
+  await expect(page.locator('.measurement-explanation p')).toContainText('0.1° geographic grid cells');
+  await expect(page.locator('.measurement-explanation p')).toContainText('The same cell can count again on another day.');
+  await page.getByText('How is activity measured?', {exact:true}).click();
   await expect(page.locator('.section-nav a')).toHaveText(['01 Select a study area','02 Compare satellites','03 Understand harmonization','04 Explore fire history']);
   await expect(page.locator('#where .page-section-heading p')).toHaveText('Select a region or define your own area to explore NASA satellite observations.');
   await expect(page.locator('.presets button')).toHaveText(['All Argentina','Gran Chaco','Pampas','Patagonia']);
