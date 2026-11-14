@@ -8,7 +8,7 @@ import pyarrow.parquet as pq
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.main import FIXTURE, METRICS, TYPES, PRODUCTION, NATIONAL, create_app
+from app.api.main import FIXTURE, METRICS, TYPES, PRODUCTION, NATIONAL, create_app, annual_records, summarize_area
 from fixtures.generate import VIIRS_GAPS, MODIS_GAPS
 
 
@@ -102,7 +102,7 @@ def test_anomaly_empty_baseline_and_zero_baseline(client):
 
 def test_csv_matches_series(client):
     params = dict(bbox='-64,-28,-59,-24', start='2011-12', end='2012-01', daynight='N')
-    response = client.get('/export.csv', params=params)
+    response = client.get('/export.csv', params={**params, 'metric': 'all'})
     assert response.status_code == 200
     assert response.headers['x-synthetic-data'] == 'true'
     exported = list(csv.DictReader(io.StringIO(response.text)))
@@ -266,3 +266,107 @@ def test_real_env_and_national_intervals_match_contract(monkeypatch):
                 assert row[metric] is None
             else:
                 assert row[metric] == pytest.approx(expected[metric])
+
+
+@pytest.mark.parametrize('month,source', [('2011-08','backcast'), ('2012-01','gapfill'), ('2024-08','observed')])
+def test_harmonized_anomaly_same_series_for_value_and_baseline(client, month, source):
+    bbox = '-64,-28,-59,-24'
+    result = client.get('/anomaly', params=dict(bbox=bbox, month=month, daynight='D')).json()
+    assert result['metric'] == 'harmonized'
+    row = result['data'][0]
+    assert row['source'] == source
+    stats = row['metrics']['harmonized']
+    series = client.get('/series', params=dict(bbox=bbox, start='2003-01', end=month, daynight='D')).json()['data']
+    year, selected_month = map(int, month.split('-'))
+    expected = median(r['harmonized'] for r in series if r['month'] == selected_month and r['year'] < year and r['harmonized'] is not None)
+    assert stats['value'] == series[-1]['harmonized']
+    assert stats['historical_median'] == expected
+    assert stats['percent_change'] == pytest.approx(100*(stats['value']-expected)/expected)
+
+
+def test_csv_defaults_to_harmonized_and_raw_is_explicit(client):
+    params = dict(bbox='-64,-28,-59,-24', start='2011-01', end='2011-01', daynight='D')
+    payload = client.get('/series', params=params).json()['data'][0]
+    for requested in (None, 'raw_modis', 'raw_viirs'):
+        response = client.get('/export.csv', params=params if requested is None else {**params, 'metric': requested})
+        metric = requested or 'harmonized'
+        row = list(csv.DictReader(io.StringIO(response.text)))[0]
+        assert set(row) & set(METRICS) == {metric}
+        assert row[metric] == '' if payload[metric] is None else float(row[metric]) == payload[metric]
+    assert client.get('/export.csv', params={**params, 'metric': 'invalid'}).status_code == 422
+
+
+def test_annual_splice_rankings_and_peak_exclude_partial_years():
+    rows = [dict(year=year, month=month, raw_modis=float(month), raw_viirs=float(month*2) if year >= 2012 else None,
+                 harmonized=float((year-2000)*month), gap_flag=(year == 2012 and month == 1))
+            for year in range(2010, 2019) for month in range(1, 13) if year != 2018 or month <= 6]
+    rows[next(i for i, r in enumerate(rows) if r['year'] == 2017 and r['month'] == 8)]['harmonized'] = None
+    annual = {r['year']:r for r in annual_records(rows)}
+    assert annual[2011]['naive_splice'] == 78
+    assert annual[2012]['naive_splice'] == 156
+    assert annual[2012]['harmonized'] == 12*78
+    assert annual[2012]['gap_flag'] is True
+    assert annual[2018]['harmonized'] is None and annual[2018]['complete'] is False
+    assert annual[2017]['harmonized'] is None
+    summary = summarize_area(rows)
+    assert [r['year'] for r in summary['top_years']] == [2016, 2015, 2014, 2013, 2012]
+    assert summary['peak_month'] == {'month': 12, 'mean': 13*12, 'years': 7}
+    assert summarize_area([])['peak_month'] is None
+
+
+def test_area_summary_matches_selected_area_full_record(client):
+    params = dict(bbox='-71,-50,-67,-40', daynight='N')
+    result = client.get('/area-summary', params=params).json()
+    assert result['daynight'] == 'N'
+    assert result['complete_years'] == 13  # 2012 through 2024, no nighttime back-casts.
+    monthly = client.get('/series', params={**params, 'start':'2003-01', 'end':'2024-12'}).json()['data']
+    assert result['top_years'] == summarize_area(monthly)['top_years']
+    assert result['annual_daytime'][0]['harmonized'] > 0  # Chart stays daytime.
+    empty = client.get('/area-summary', params=dict(bbox='0,0,1,1')).json()
+    assert empty['has_data'] is False and empty['top_years'] == [] and empty['peak_month'] is None
+    assert client.get('/area-summary', params={**params, 'daynight':''}).status_code == 422
+
+
+def test_meta_refreshes_latest_month_when_file_changes(tmp_path, custom_table):
+    path = tmp_path / 'updates.parquet'
+    pq.write_table(custom_table, path)
+    c = TestClient(create_app(path))
+    assert c.get('/meta').json()['end'] == '2020-08'
+    rows = custom_table.to_pylist()
+    rows.append({**rows[-1], 'year': 2025, 'month': 12})
+    pq.write_table(pa.Table.from_pylist(rows, schema=custom_table.schema), path)
+    assert c.get('/meta').json()['end'] == '2025-12'
+
+
+def test_anomaly_rank_uses_only_current_and_earlier_same_months(tmp_path, custom_table):
+    rows = custom_table.to_pylist()
+    rows.extend([{**rows[-1], 'year': 2021}, {**rows[-1], 'year': 2022, 'harmonized': 99.}])
+    path = tmp_path / 'ranks.parquet'
+    pq.write_table(pa.Table.from_pylist(rows, schema=custom_table.schema), path)
+    c = TestClient(create_app(path))
+    payload = c.get('/anomaly', params=dict(bbox='179,-1,180,1', month='2021-08', daynight='D')).json()
+    stats = payload['data'][0]['metrics']['harmonized']
+    assert stats['value'] == 11 and stats['historical_median'] == 7
+    assert stats['rank'] == 1 and stats['rank_count'] == 3 and stats['rank_tied'] is True
+    absent = c.get('/anomaly', params=dict(bbox='0,20,1,21', month='2021-08', daynight='D')).json()['data'][0]['metrics']['harmonized']
+    assert absent['rank'] is None and absent['rank_count'] == 0
+
+
+def test_validation_all_periods_and_limitations_without_invented_raw_scores(tmp_path):
+    import json
+    def scores(value):
+        return {frequency: {'MAPE_pct': value, 'bias_pct': value-1, 'R2': .9} for frequency in ('monthly','annual')}
+    payload = {'test_years': [2020,2021,2022,2023,2024,2025],
+               'scores_test': {'raw_modis': scores(60), 'model_b': scores(12)},
+               'scores_by_period': {'definition':'held-out only', '2020-2022': {'model_a':scores(20), 'model_b':scores(10)},
+                                    '2023-2025': {'model_b':scores(14)}, '2020-2025': {'model_b':scores(12)}},
+               'known_limitations':[{'id':'aqua_overpass_drift', 'finding':'Aqua overpass drift since 2023', 'impact':'Model relation can change.'}]}
+    path = tmp_path / 'validation.json'
+    path.write_text(json.dumps(payload))
+    result = TestClient(create_app(FIXTURE, validation_path=path)).get('/validation').json()
+    assert result['status'] == 'ready'
+    assert [p['label'] for p in result['periods']] == ['2020-2022','2023-2025','2020-2025']
+    assert all(m['raw_modis'] is None for m in result['periods'][0]['metrics'])
+    assert result['periods'][0]['metrics'][0]['harmonized'] == 10
+    assert result['periods'][2]['metrics'][0]['raw_modis'] == 60
+    assert result['known_limitations'] == payload['known_limitations']

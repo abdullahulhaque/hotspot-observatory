@@ -17,6 +17,8 @@ import pyarrow.dataset as ds
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 
+from .quality import annotate, read_metadata
+
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "fixtures/synthetic_harmonized.parquet"
 PRODUCTION = ROOT / "out/harmonized.parquet"
@@ -104,6 +106,12 @@ class DataStore:
         metadata = [fragment.physical_schema.metadata or {} for fragment in self.dataset.get_fragments()]
         self.synthetic = self.path == FIXTURE.resolve() or any(
             m.get(b"synthetic", b"").lower() == b"true" for m in metadata)
+        self.has_nrt = "nrt" in self.dataset.schema.names
+        if self.has_nrt and self.dataset.schema.field("nrt").type != pa.bool_():
+            raise ValueError("nrt must be boolean.")
+        if self.path == PRODUCTION.resolve() and (not self.has_nrt or self.synthetic):
+            raise ValueError("Production requires real data with current-contract nrt provenance.")
+        self.contract = self.metadata_value(metadata, b"contract", "unspecified")
         self.unit = "active cell-days"
         self.calibration = self.metadata_value(metadata, b"calibration", "unapproved / unspecified")
         self.coverage: dict[tuple[int, str], bool] = {}
@@ -112,21 +120,25 @@ class DataStore:
         self.has_harmonized = False
         self.flags = {}
         self.sources = {}
+        self.nrt = {}
         # Bounded-memory inventory. Never load the full production dataset into Python rows.
         for batch in self.dataset.scanner(batch_size=65536).to_batches():
             if not batch.num_rows:
                 continue
             table = pa.Table.from_batches([batch])
+            if self.has_nrt and table["nrt"].null_count:
+                raise ValueError("nrt must be non-null.")
             if table["source"].null_count or table["gap_flag"].null_count or not pc.all(pc.is_in(table["source"], value_set=pa.array(["backcast", "observed", "gapfill"])) ).as_py():
                 raise ValueError("source must be backcast/observed/gapfill and gap_flag must be non-null.")
             for key, lo, hi in (("lon", 0, 2), ("lat", 1, 3)):
                 self.bounds[lo] = min(self.bounds[lo], pc.min(table[key]).as_py())
                 self.bounds[hi] = max(self.bounds[hi], pc.max(table[key]).as_py())
             grouped = table.group_by(["year", "month", "daynight", "source"]).aggregate(
-                [(metric, "count") for metric in METRICS] + [("gap_flag", "any")])
+                [(metric, "count") for metric in METRICS] + [("gap_flag", "any")] + ([("nrt", "any")] if self.has_nrt else []))
             for row in grouped.to_pylist():
                 self.months.add((row["year"], row["month"]))
                 flag_key = (row["year"], row["month"], row["daynight"])
+                self.nrt[flag_key] = self.nrt.get(flag_key, False) or row.get("nrt_any", False)
                 self.flags[flag_key] = self.flags.get(flag_key, False) or row["gap_flag_any"]
                 if flag_key not in self.sources or row["source"] != "observed":
                     self.sources[flag_key] = row["source"]
@@ -191,6 +203,7 @@ class DataStore:
                 row = {"year": year, "month": month, "daynight": period}
                 aggregate = totals.get((year, month, period))
                 row["source"] = ("backcast" if aggregate["backcast"] else "gapfill" if aggregate["gapfill"] else "observed") if aggregate else self.sources.get((year, month, period), "backcast" if year < 2012 and period == "D" else "observed")
+                row["nrt"] = self.nrt.get((year, month, period), False)
                 row["gap_flag"] = self.flags.get((year, month, period), False) or bool(aggregate and aggregate["gap_flag"])
                 for metric in METRICS:
                     if aggregate:
@@ -198,7 +211,7 @@ class DataStore:
                         # A partially missing aggregate is unknown, not a misleading partial sum.
                         row[metric] = total if count == aggregate["rows"] else None
                     else:
-                        row[metric] = 0.0 if has_area and self.coverage.get((year, metric), False) else None
+                        row[metric] = 0.0 if has_area and (year, month) in self.months and self.coverage.get((year, metric), False) else None
                     if year < 2012 and (metric == "raw_viirs" or (metric == "harmonized" and period == "N")):
                         row[metric] = None
                 records.append(row)
@@ -206,13 +219,19 @@ class DataStore:
 
 
 def create_app(data_path: str | Path | None = None, national_path: Path = NATIONAL, validation_path: Path = VALIDATION) -> FastAPI:
-    api = FastAPI(title="Hotspot Observatory", version="0.3.0")
-    path = Path(data_path or os.environ.get("DATA_PATH") or (PRODUCTION if PRODUCTION.exists() else FIXTURE))
+    api = FastAPI(title="Hotspot Observatory", version="0.4.1")
+    path = Path(data_path or os.environ.get("DATA_PATH") or PRODUCTION)
 
     @lru_cache(maxsize=1)
+    def cached_store(signature):
+        return DataStore(path)
+
     def store():
         try:
-            return DataStore(path)
+            # Refresh the inventory when a single-file dataset is regenerated.
+            stat = path.stat()
+            signature = (stat.st_mtime_ns, stat.st_size) if path.is_file() else None
+            return cached_store(signature)
         except (OSError, ValueError, pa.ArrowException) as exc:
             raise HTTPException(503, f"Cannot read DATA_PATH: {exc}") from exc
 
@@ -220,7 +239,8 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
     def meta():
         data = store()
         months = sorted(data.months)
-        return {**data.provenance(), "years": data.years,
+        return {**data.provenance(), "years": data.years, "contract": data.contract,
+                "latest_complete_month": read_metadata(validation_path).get("latest_complete_month") if not data.synthetic else None,
                 "start": f"{months[0][0]:04}-{months[0][1]:02}" if months else None,
                 "end": f"{months[-1][0]:04}-{months[-1][1]:02}" if months else None,
                 "bbox": data.bounds if months else None, "has_harmonized": data.has_harmonized,
@@ -256,21 +276,43 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
             coverage = payload.get("interval_80", {}).get("leave_one_year_out", {}).get("monthly_test_coverage")
             if coverage is not None and (not isinstance(coverage, (int, float)) or not math.isfinite(coverage) or not 0 <= coverage <= 1):
                 raise ValueError("Invalid interval coverage")
+            # Period reports may omit raw MODIS; model_a is a correction, never a raw substitute.
+            years = payload.get("test_years", [])
+            overall = f"{min(years)}-{max(years)}" if years else held_out
+            period_reports = []
+            for label, report in payload.get("scores_by_period", {}).items():
+                if not isinstance(report, dict) or "model_b" not in report:
+                    continue
+                raw = report.get("raw_modis", payload.get("scores_test", {}).get("raw_modis", {}) if label == overall else {})
+                period_metrics = []
+                for frequency in ("monthly", "annual"):
+                    for key, name, unit in (("MAPE_pct", "MAPE", "%"), ("bias_pct", "bias", "%"), ("R2", "R²", "unitless")):
+                        values = {"raw_modis": raw.get(frequency, {}).get(key), "harmonized": report["model_b"].get(frequency, {}).get(key)}
+                        if any(v is not None and (isinstance(v, bool) or not isinstance(v, (float, int)) or not math.isfinite(v)) for v in values.values()):
+                            raise ValueError("Period scores must be finite numbers or null")
+                        period_metrics.append({"name": f"{frequency.title()} {name}", "unit": unit, **values})
+                period_reports.append({"label": label, "note": str(report.get("note", "")), "metrics": period_metrics})
+            if not any(report["label"] == overall for report in period_reports):
+                period_reports.append({"label": overall, "note": "All held-out years", "metrics": metrics})
             return {"status": "ready", "metrics": metrics, "held_out": held_out,
-                    "monthly_interval_coverage": coverage,
+                    "periods": period_reports, "known_limitations": payload.get("known_limitations", []),
+                    "monthly_interval_coverage": coverage, "nominal_interval_coverage": payload.get("interval_80", {}).get("nominal"),
+                    "live_year": payload.get("live_year", {}),
                     "notes": [str(note) for note in payload.get("notes", [])]}
         except (OSError, ValueError, KeyError, TypeError) as exc:
             return {"status": "invalid", "message": f"Cannot read validation scores: {exc}", "metrics": []}
 
     def intervals(data, rows):
         national = {}
-        status = "synthetic"
+        status = "synthetic" if data.synthetic else "unavailable"
         if national_path.exists():
             try:
                 table = ds.dataset(str(national_path), format="parquet").to_table()
                 required = {"year", "month", "harmonized", "lo80", "hi80"}
                 if not required.issubset(table.column_names):
                     raise ValueError("Missing national interval columns")
+                if not data.synthetic and (table.schema.metadata or {}).get(b"synthetic", b"").lower() == b"true":
+                    raise ValueError("Synthetic intervals cannot accompany real activity.")
                 national = {(r["year"], r["month"]): r for r in table.to_pylist() if r.get("daynight", "D") == "D"}
                 status = "national_scaled"
             except (OSError, ValueError, pa.ArrowException):
@@ -288,16 +330,20 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
                     if all(math.isfinite(v) for v in (lo, hi, total)) and 0 <= lo <= total <= hi:
                         row["lo80"] = row["harmonized"] * lo / total
                         row["hi80"] = row["harmonized"] * hi / total
+        metadata = read_metadata(validation_path) if not data.synthetic else {}
         return {"source": status, "synthetic": status == "synthetic" or data.synthetic,
+                "monthly_coverage": metadata.get("interval_80", {}).get("leave_one_year_out", {}).get("monthly_test_coverage"),
+                "nominal_coverage": metadata.get("interval_80", {}).get("nominal"),
+                "test_years": metadata.get("test_years", []),
                 "note": {"synthetic": "Illustrative synthetic 80% band (±20%); national interval file is absent.",
                          "national_scaled": "National 80% prediction interval, scaled in proportion to selected-area activity. Regional coverage has not been independently validated.",
-                         "unavailable": "National interval file is invalid; band unavailable."}[status]}
+                         "unavailable": "National interval file is missing or invalid; prediction interval unavailable."}[status]}
 
     @api.get("/series")
     def series(bbox: str, start: str, end: str, daynight: str = ""):
         bounds, dates, selected = parse_bbox(bbox), month_range(start, end), periods(daynight)
         data = store()
-        rows = data.series(bounds, dates, selected)
+        rows = annotate(data.series(bounds, dates, selected), read_metadata(validation_path), data.synthetic)
         band = intervals(data, rows)
         return {**data.provenance(), "bbox": bounds, "start": start, "end": end,
                 "has_data": data.has_area(tuple(bounds)), "interval": band, "data": rows}
@@ -308,24 +354,29 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
         data = store()
         years = [y for y in data.years if y < year]
         dates = [(y, selected_month) for y in years] + [(year, selected_month)]
-        records = data.series(bounds, dates, selected)
+        records = annotate(data.series(bounds, dates, selected), read_metadata(validation_path), data.synthetic)
+        band = intervals(data, records)
         result = []
         for period in selected:
             current = next(r for r in records if r["year"] == year and r["daynight"] == period)
             metrics = {}
             for metric in METRICS:
-                history = [r for r in records if r["year"] < year and r["daynight"] == period and r[metric] is not None]
+                history = [r for r in records if r["year"] < year and r["daynight"] == period and r[metric] is not None and metric not in r["incomplete_metrics"]]
                 baseline = median(r[metric] for r in history) if history else None
                 value = current[metric]
-                difference = value - baseline if value is not None and baseline is not None else None
+                eligible = value is not None and metric not in current["incomplete_metrics"] and current["quality_available"]
+                difference = value - baseline if eligible and baseline is not None else None
                 metrics[metric] = {"value": value, "historical_median": baseline, "difference": difference,
                                    "percent_change": 100 * difference / baseline if difference is not None and baseline else None,
-                                   "baseline_years": [r["year"] for r in history], "sample_size": len(history)}
-            result.append({"daynight": period, "source": current["source"],
-                           "gap_flag": current["gap_flag"], "metrics": metrics})
+                                   "baseline_years": [r["year"] for r in history], "sample_size": len(history),
+                                   "rank": 1 + sum(r[metric] > value for r in history) if eligible else None,
+                                   "rank_count": len(history) + 1 if eligible else 0,
+                                   "rank_tied": any(r[metric] == value for r in history) if eligible else False,
+                                   "comparison_status": "incomplete" if metric in current["incomplete_metrics"] else "quality_unavailable" if not current["quality_available"] else "available"}
+            result.append({**{key: value for key, value in current.items() if key not in METRICS}, "metrics": metrics})
         return {**data.provenance(), "bbox": bounds, "month": month,
-                "metric": "harmonized",
-                "baseline": "Same calendar month in available earlier years; target year excluded.", "data": result}
+                "metric": "harmonized", "interval": band,
+                "baseline": "Same calendar month in available earlier years; incomplete observations and target year excluded.", "data": result}
 
     @api.get("/area-summary")
     def area_summary(bbox: str, daynight: str = "D"):
@@ -349,12 +400,13 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
             raise HTTPException(422, "metric must be harmonized, raw_modis, raw_viirs, or all.")
         bounds, dates, selected = parse_bbox(bbox), month_range(start, end), periods(daynight)
         data = store()
-        rows = data.series(bounds, dates, selected)
+        rows = annotate(data.series(bounds, dates, selected), read_metadata(validation_path), data.synthetic)
+        band = intervals(data, rows)
 
         def chunks():
             stream = io.StringIO()
             chosen = METRICS if metric == "all" else (metric,)
-            fields = ["year", "month", "daynight", *chosen, "source", "gap_flag", "synthetic", "unit", "calibration"]
+            fields = ["year", "month", "daynight", *chosen, "source", "gap_flag", "nrt", "incomplete", "incomplete_metrics", "missing_snpp_days", "missing_snpp_dates", "quality_available", "lo80", "hi80", "interval_note", "interval_monthly_coverage", "limitations", "synthetic", "unit", "calibration"]
             writer = csv.DictWriter(stream, fieldnames=fields)
             writer.writeheader()
             yield stream.getvalue()
@@ -364,7 +416,11 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
                 # Prefix spreadsheet formula markers in metadata from external datasets.
                 provenance = {k: ("'" + v if isinstance(v, str) and v.startswith(("=", "+", "-", "@", "\t", "\r")) else v)
                               for k, v in data.provenance().items()}
-                exported = {**row, **provenance, "synthetic": str(data.synthetic).lower()}
+                exported = {**row, **provenance, "synthetic": str(data.synthetic).lower(),
+                            "interval_note": band["note"], "interval_monthly_coverage": band["monthly_coverage"],
+                            "limitations": "; ".join(item.get("finding", "") for item in row["limitations"]),
+                            "incomplete": metric in row["incomplete_metrics"] if metric != "all" else bool(row["incomplete_metrics"]),
+                            "incomplete_metrics": ";".join(row["incomplete_metrics"]), "missing_snpp_dates": ";".join(row["missing_snpp_dates"])}
                 writer.writerow({key: exported[key] for key in fields})
                 yield stream.getvalue()
         return StreamingResponse(chunks(), media_type="text/csv", headers={
