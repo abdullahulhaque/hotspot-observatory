@@ -3,8 +3,8 @@ harmonized.parquet: 626,716 rows; years 2003-2026
 |                   |   rows |
 |:------------------|-------:|
 | ('backcast', 'D') | 138429 |
-| ('gapfill', 'D')  |  10112 |
-| ('observed', 'D') | 359646 |
+| ('gapfill', 'D')  |  11959 |
+| ('observed', 'D') | 357799 |
 | ('observed', 'N') | 118529 |
 
 CHECK cell sum == national (day), all 286 months: max |diff| = 3.64e-12
@@ -155,6 +155,13 @@ GAP-FILLED
   "harmonized": 6533.057639498506,
   "lo80": 5450.068076939374,
   "hi80": 7807.846003072339
+ },
+ {
+  "month": "2026-07",
+  "raw_viirs": 2359.0,
+  "harmonized": 3052.6887878760986,
+  "lo80": 2546.554121327995,
+  "hi80": 3648.4605345512787
  }
 ]
 

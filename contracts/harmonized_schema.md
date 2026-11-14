@@ -1,4 +1,4 @@
-# Harmonized hot-spot schema (v0.4)
+# Harmonized hot-spot schema (v0.4.1)
 
 Output of `pipeline/harmonize.py`. One row per (grid cell, year, month,
 daynight). Consumers: `app/` and anything downstream.
@@ -28,7 +28,7 @@ The file metadata key `coverage` gives the current range.
 | `raw_modis`  | float64  | yes      | MODIS Aqua active cell-days in this cell/month/daynight, after filters. `0` = covered, no activity. Filled for every month in coverage. |
 | `raw_viirs`  | float64  | yes      | VIIRS S-NPP active cell-days, same unit and filters. `null` for 2003–2011 (before VIIRS); filled from 2012, always as observed, including gap months. |
 | `harmonized` | float64  | yes      | Activity on the VIIRS S-NPP scale across both eras. See *Harmonized values* below. |
-| `source`     | string   | no       | How `harmonized` was produced: `"backcast"` (day, 2003–2011, modelled from MODIS), `"gapfill"` (day, VIIRS-gap months, modelled from MODIS; **new in v0.3**), `"observed"` (everything else). |
+| `source`     | string   | no       | How `harmonized` was produced: `"backcast"` (day, 2003–2011, modelled from MODIS), `"gapfill"` (day, VIIRS-gap months, modelled from MODIS; **new in v0.3**; live year from v0.4.1), `"observed"` (everything else). |
 | `gap_flag`   | bool     | no       | `true` if the month (all cells, both day and night) is a flagged sensor data gap: more than 3 days with zero national rows from one sensor while the reference sensor had rows. References: 2012 onward (including the live year), MODIS Aqua ↔ VIIRS S-NPP; 2003–2011, Aqua vs MODIS Terra (**new in v0.3**). The sensor that was missing is listed in `validation.json`. |
 | `nrt`        | bool     | no       | **New in v0.4.** `true` if the month (all cells, day and night) contains near-real-time (NRT) data for either sensor. NRT is provisional: FIRMS later replaces it with standard processing, and values may change on refresh. Currently 2026-08 to 2026-10 (VIIRS NRT from Aug, MODIS NRT from Sep). `false` for all archive years. |
 
@@ -38,7 +38,8 @@ The file metadata key `coverage` gives the current range.
 |------------------------------------------|---------------|----------|
 | Day, 2003–2011                           | `raw_modis × f(year, month)` | backcast |
 | Day, 2012–2025, month flagged for a VIIRS gap | `raw_modis × f(year, month)` | gapfill |
-| Day, live year (2026), including gap-flagged months | `raw_viirs` | observed |
+| Day, live year (2026), VIIRS-gap month whose missing days are confirmed missing S-NPP coverage | `raw_modis × f(year, month)` | gapfill |
+| Day, live year (2026), all other months | `raw_viirs` | observed |
 | Day, 2012+, all other months             | `raw_viirs`   | observed |
 | Night, 2003–2011                         | null          | observed |
 | Night, 2012+ (including VIIRS-gap months) | `raw_viirs`  | observed |
@@ -57,8 +58,11 @@ Months flagged because **MODIS** was missing are not filled. From 2012,
 back-cast is built from under-counted MODIS. Filter on `gap_flag` to exclude
 these months.
 
-Gap-filled months: 2012-01, 2022-07, 2022-08, 2024-07. Live-year VIIRS-gap months
-are flagged but **not** filled (currently 2026-07, with 6 VIIRS outage days).
+Gap-filled months: 2012-01, 2022-07, 2022-08, 2024-07, 2026-07. A live-year
+VIIRS-gap month is filled only when every missing day is confirmed as missing
+S-NPP coverage (see *Live year*); otherwise it is flagged and left observed.
+Months from 2023 on (2024-07, 2026-07) are drift-period estimates: model b runs
+high since 2023.
 
 ## Live year (2026)
 
@@ -79,6 +83,14 @@ are flagged but **not** filled (currently 2026-07, with 6 VIIRS outage days).
 - **Months:** only months inside both sensors' first..last `acq_date` are
   written. A partial month is held back until it is complete; currently
   2026-11, because S-NPP NRT ends on 2026-11-02.
+- **Gap fill:** `/api/data_availability` gives only a min..max date per source, so it
+  cannot show days missing inside the range. `fetch_firms.py --coverage-check` counts
+  S-NPP and NOAA-20 rows **worldwide** on each live-year day with no S-NPP rows in
+  Argentina, writing `pipeline/ref/snpp_coverage_2026.csv`. A day counts as missing
+  coverage when S-NPP has zero rows worldwide and NOAA-20 has rows. 2026-07
+  (Jul 11–16) passes and is gap-filled. 2026-04 (Apr 28–30, also confirmed) is under
+  the 3-day threshold and stays observed and under-counted (listed in
+  `known_limitations`).
 - **Not scored:** live-year months are not in the test set.
 - Refresh by re-running `fetch_firms.py --refresh-nrt` and then `harmonize.py`.
 
@@ -102,7 +114,7 @@ are flagged but **not** filled (currently 2026-07, with 6 VIIRS outage days).
 | `calibration`        | `model_b_v1` |
 | `calibration_detail` | JSON: model form, coefficients, training window, 80% interval method and quantiles |
 | `synthetic`          | `false` |
-| `filters`, `country`, `contract` | as above; `contract` = `harmonized_schema v0.4` |
+| `filters`, `country`, `contract` | as above; `contract` = `harmonized_schema v0.4.1` |
 | `coverage`           | first..last month written, e.g. `2003-01..2026-10` |
 
 ### Calibration `model_b_v1`
@@ -149,13 +161,20 @@ coverage; the 2012 join check; the gap-flagged months, each with the missing
 sensor, reference sensor and day count; the gap-filled months, each with
 raw VIIRS, filled value and interval; `scores_by_period` (model a and model b test
 metrics for 2020–2022 stable orbit, 2023–2025 Aqua drift, and 2020–2025); and
-`known_limitations` (sensor version and overpass-time table 2003–2025, the
+`latest_complete_month` (currently `2026-10`); `known_limitations` (sensor version and overpass-time table 2003–2025, the
 back-cast overpass check, and the Jul 2024 gap-fill caveat); and `live_year`
 (sources and requested ranges, rows, first and last dates per sensor, months
 appended and held back, last date covered, NRT months, gap days, and the clip
 and static-source methods with their validation numbers).
 
 ## Changelog
+
+- v0.4.1 (rule change, no schema change) — Live-year VIIRS-gap months are gap-filled
+  with model b once the missing S-NPP coverage is confirmed (2026-07 is now
+  `source = "gapfill"` with `lo80`/`hi80`). `validation.json` gains
+  `latest_complete_month`, `live_year.gap_filled`, `live_year.snpp_coverage_check`,
+  `live_year.missing_viirs_days_under_threshold`, and limitations `gapfill_2026_07`,
+  `live_2026_04_missing_viirs_days`, `cell_boundary_straddling`.
 
 - v0.4 — Live year 2026 appended from the FIRMS area API (SP, then NRT), clipped
   to Argentina, complete months only (to 2026-10). New column `nrt` in both

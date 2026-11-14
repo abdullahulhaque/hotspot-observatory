@@ -1,6 +1,6 @@
 {
   "calibration": "model_b_v1",
-  "contract": "harmonized_schema v0.4",
+  "contract": "harmonized_schema v0.4.1",
   "unit": "active_cell_days_0.1deg",
   "daynight": "D",
   "model": {
@@ -412,9 +412,236 @@
         ]
       }
     ],
-    "gap_flagged_not_filled": [
+    "gap_filled": [
       "2026-07"
     ],
+    "gap_flagged_not_filled": [],
+    "missing_viirs_days_under_threshold": [
+      {
+        "month": "2026-04",
+        "gap_days": 3,
+        "dates": [
+          "2026-04-28",
+          "2026-04-29",
+          "2026-04-30"
+        ],
+        "confirmed": true
+      }
+    ],
+    "snpp_coverage_check": {
+      "rule": "a live VIIRS-gap month is gap-filled only if every gap day has zero S-NPP rows worldwide while NOAA-20 has rows (missing coverage, not a quiet day). /api/data_availability gives only a min..max date per source (VIIRS_SNPP_SP 2012-01-20..2026-07-31), so it cannot show days missing inside the range.",
+      "file": "pipeline/ref/snpp_coverage_2026.csv",
+      "days": [
+        {
+          "date": "2026-03-11",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_SP",
+          "noaa20_world_rows": 36011,
+          "noaa20_world_source": "VIIRS_NOAA20_SP",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-03-12",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_SP",
+          "noaa20_world_rows": 36793,
+          "noaa20_world_source": "VIIRS_NOAA20_SP",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-04-28",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_SP",
+          "noaa20_world_rows": 32049,
+          "noaa20_world_source": "VIIRS_NOAA20_SP",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-04-29",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_SP",
+          "noaa20_world_rows": 33831,
+          "noaa20_world_source": "VIIRS_NOAA20_SP",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-04-30",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_SP",
+          "noaa20_world_rows": 34719,
+          "noaa20_world_source": "VIIRS_NOAA20_SP",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-06-01",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_SP",
+          "noaa20_world_rows": 32018,
+          "noaa20_world_source": "VIIRS_NOAA20_SP",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-06-02",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_SP",
+          "noaa20_world_rows": 33556,
+          "noaa20_world_source": "VIIRS_NOAA20_SP",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-07-11",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_SP",
+          "noaa20_world_rows": 48949,
+          "noaa20_world_source": "VIIRS_NOAA20_SP",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-07-12",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_SP",
+          "noaa20_world_rows": 44845,
+          "noaa20_world_source": "VIIRS_NOAA20_SP",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-07-13",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_SP",
+          "noaa20_world_rows": 53804,
+          "noaa20_world_source": "VIIRS_NOAA20_SP",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-07-14",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_SP",
+          "noaa20_world_rows": 82679,
+          "noaa20_world_source": "VIIRS_NOAA20_SP",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-07-15",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_SP",
+          "noaa20_world_rows": 100595,
+          "noaa20_world_source": "VIIRS_NOAA20_SP",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-07-16",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_SP",
+          "noaa20_world_rows": 112063,
+          "noaa20_world_source": "VIIRS_NOAA20_SP",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-08-03",
+          "snpp_world_rows": 1973,
+          "snpp_world_source": "VIIRS_SNPP_NRT",
+          "noaa20_world_rows": 74995,
+          "noaa20_world_source": "VIIRS_NOAA20_NRT",
+          "snpp_missing": false
+        },
+        {
+          "date": "2026-11-03",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_NRT",
+          "noaa20_world_rows": 55277,
+          "noaa20_world_source": "VIIRS_NOAA20_NRT",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-11-04",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_NRT",
+          "noaa20_world_rows": 63959,
+          "noaa20_world_source": "VIIRS_NOAA20_NRT",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-11-05",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_NRT",
+          "noaa20_world_rows": 67369,
+          "noaa20_world_source": "VIIRS_NOAA20_NRT",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-11-06",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_NRT",
+          "noaa20_world_rows": 55252,
+          "noaa20_world_source": "VIIRS_NOAA20_NRT",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-11-07",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_NRT",
+          "noaa20_world_rows": 60653,
+          "noaa20_world_source": "VIIRS_NOAA20_NRT",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-11-08",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_NRT",
+          "noaa20_world_rows": 58739,
+          "noaa20_world_source": "VIIRS_NOAA20_NRT",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-11-09",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_NRT",
+          "noaa20_world_rows": 63638,
+          "noaa20_world_source": "VIIRS_NOAA20_NRT",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-11-10",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_NRT",
+          "noaa20_world_rows": 66193,
+          "noaa20_world_source": "VIIRS_NOAA20_NRT",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-11-11",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_NRT",
+          "noaa20_world_rows": 50326,
+          "noaa20_world_source": "VIIRS_NOAA20_NRT",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-11-12",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_NRT",
+          "noaa20_world_rows": 49061,
+          "noaa20_world_source": "VIIRS_NOAA20_NRT",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-11-13",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_NRT",
+          "noaa20_world_rows": 42827,
+          "noaa20_world_source": "VIIRS_NOAA20_NRT",
+          "snpp_missing": true
+        },
+        {
+          "date": "2026-11-14",
+          "snpp_world_rows": 0,
+          "snpp_world_source": "VIIRS_SNPP_NRT",
+          "noaa20_world_rows": 38799,
+          "noaa20_world_source": "VIIRS_NOAA20_NRT",
+          "snpp_missing": true
+        }
+      ]
+    },
     "clip": {
       "method": "point in Natural Earth 10m Argentina polygon (pipeline/ref/argentina_ne10m.geojson)",
       "validation_2019_vs_country_archive": {
@@ -453,6 +680,7 @@
     },
     "not_in_scoring": "Live-year months are not part of the test set."
   },
+  "latest_complete_month": "2026-10",
   "scores_test": {
     "raw_modis": {
       "monthly": {
@@ -744,19 +972,26 @@
       "harmonized": 6533.057639498506,
       "lo80": 5450.068076939374,
       "hi80": 7807.846003072339
+    },
+    {
+      "month": "2026-07",
+      "raw_viirs": 2359.0,
+      "harmonized": 3052.6887878760986,
+      "lo80": 2546.554121327995,
+      "hi80": 3648.4605345512787
     }
   ],
   "notes": [
     "Scores exclude all gap-flagged months.",
     "Back-cast and gap-fill lo80/hi80 use the leave-one-year-out interval.",
     "Training (2012-2019) and model b coefficients unchanged when 2025 was added; back-cast values identical.",
-    "Live year: harmonized = observed VIIRS, including gap-flagged months (not gap-filled)."
+    "Live year: harmonized = observed VIIRS, except VIIRS-gap months whose missing days are confirmed as missing S-NPP coverage, which are gap-filled with model b."
   ],
   "known_limitations": [
     {
       "id": "aqua_overpass_drift",
       "finding": "MODIS Aqua's median daytime overpass is stable at ~13:52-13:57 local solar time through 2022, then moves later: 14:09 (2023), 14:31 (2024), 15:02 (2025). VIIRS S-NPP stays at 13:46-13:54 throughout. No change around 2020; the drift begins in 2023 and accelerates through 2024-2025.",
-      "impact": "Model b was fitted with both sensors at ~13:50. From 2023 MODIS samples a later part of the diurnal fire cycle, so the MODIS-VIIRS relation is not the trained one. This is consistent with (not proven to cause) model b over-predicting 2024 and 2025 (annual error % by year, scored months: {\"2020\": -1.5, \"2021\": -6.5, \"2022\": 2.2, \"2023\": 2.2, \"2024\": 18.6, \"2025\": 11.7}). Affects gap-filled months from 2023 (2024-07). Does not affect the 2003-2011 back-cast or 2012-2022 values.",
+      "impact": "Model b was fitted with both sensors at ~13:50. From 2023 MODIS samples a later part of the diurnal fire cycle, so the MODIS-VIIRS relation is not the trained one. This is consistent with (not proven to cause) model b over-predicting 2024 and 2025 (annual error % by year, scored months: {\"2020\": -1.5, \"2021\": -6.5, \"2022\": 2.2, \"2023\": 2.2, \"2024\": 18.6, \"2025\": 11.7}). Affects gap-filled months from 2023 (2024-07, 2026-07). Does not affect the 2003-2011 back-cast or 2012-2022 values.",
       "action": "None taken (diagnostic only, no refit)."
     },
     {
@@ -798,6 +1033,22 @@
       "finding": "Gap-filled month 2024-07 (harmonized 6,533 vs raw VIIRS 3,773 over an 11-day outage) is likely high, drift period: model b over-predicts the surrounding 2024 months (Jun +32%, Aug +23%, Sep +25%) while Aqua's overpass has drifted to ~14:31.",
       "status": "likely high, drift period",
       "action": "None taken (no refit)."
+    },
+    {
+      "id": "gapfill_2026_07",
+      "finding": "Gap-filled live-year month 2026-07 (harmonized 3,053, 80% 2,547-3,648, vs raw VIIRS 2,359). S-NPP coverage missing on 2026-07-11, 2026-07-12, 2026-07-13, 2026-07-14, 2026-07-15, 2026-07-16 (zero S-NPP rows worldwide, NOAA-20 present). This is a drift-period estimate, model b runs high since 2023.",
+      "status": "drift-period estimate, model b runs high since 2023",
+      "action": "None taken (no refit)."
+    },
+    {
+      "id": "live_2026_04_missing_viirs_days",
+      "finding": "2026-04 has 3 days without S-NPP data (2026-04-28, 2026-04-29, 2026-04-30; confirmed missing coverage: True), under the >3-day threshold, so it is not gap-flagged or filled. raw VIIRS 691 is under-counted by roughly the activity on those days (model b from MODIS: 1,144, which itself runs high since 2023).",
+      "action": "None taken (below threshold)."
+    },
+    {
+      "id": "cell_boundary_straddling",
+      "finding": "A fire or burn scar that straddles a 0.1 deg cell boundary counts once in each cell it touches, so one event can add more than one cell-day per day. Pixel footprints differ (MODIS ~1 km, VIIRS 375 m), so the chance of straddling differs by sensor; model b absorbs the average effect nationally but not event by event.",
+      "action": "None taken; inherent to the gridded unit."
     },
     {
       "id": "diagnostic_table",

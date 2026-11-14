@@ -5,7 +5,14 @@ up to its max_date, near-real-time (NRT) after. Raw responses are saved
 unmodified under firms_api/<year>/ (git-ignored); this script does no filtering.
 
 MAP_KEY comes from env FIRMS_MAP_KEY, else from .env. It is never printed.
-Usage: .venv/bin/python pipeline/fetch_firms.py [--refresh-nrt]
+Usage: .venv/bin/python pipeline/fetch_firms.py [--refresh-nrt] [--coverage-check]
+
+--coverage-check: for every live-year day on which Argentina has no S-NPP rows
+while MODIS Aqua has rows (live.live_gaps), count S-NPP and NOAA-20 rows over the
+whole world. Zero S-NPP rows worldwide while NOAA-20 has rows = missing S-NPP
+coverage, not a day without detections (/api/data_availability only gives a
+min..max date range per source, so it cannot show gaps inside the range).
+Writes counts only (no key, no detections) to pipeline/ref/snpp_coverage_<year>.csv.
 """
 import io
 import os
@@ -69,7 +76,38 @@ def plan(avail, today):
     return jobs
 
 
+def _source_for(day, sp, nrt, avail):
+    return sp if day <= avail[sp][1] else nrt
+
+
+def coverage_check(key, avail):
+    import live                                      # local import: live reads the fetched files
+    gaps = live.live_gaps({(START.year, m) for m in range(1, 13)})
+    days = sorted({date.fromisoformat(d) for ds in gaps[gaps.sensor_missing == "VIIRS"].dates for d in ds})
+    rows = []
+    for day in days:
+        r = {"date": day.isoformat()}
+        for col, (sp, nrt) in [("snpp_world_rows", ("VIIRS_SNPP_SP", "VIIRS_SNPP_NRT")),
+                               ("noaa20_world_rows", ("VIIRS_NOAA20_SP", "VIIRS_NOAA20_NRT"))]:
+            src = _source_for(day, sp, nrt, avail)
+            txt = get(f"{BASE}/area/csv/{key}/{src}/world/1/{day.isoformat()}", key)
+            if not txt.startswith("latitude"):
+                raise RuntimeError(f"{src} {day}: unexpected response: {txt[:200].replace(key, '<key>')}")
+            r[col] = sum(1 for ln in txt.splitlines()[1:] if ln.split(",")[5:6] and ln.split(",")[5] == day.isoformat())
+            r[col.replace("_rows", "_source")] = src
+            time.sleep(0.5)
+        r["snpp_missing"] = r["snpp_world_rows"] == 0 and r["noaa20_world_rows"] > 0
+        rows.append(r)
+        print(r)
+    out = ROOT / "pipeline" / "ref" / f"snpp_coverage_{START.year}.csv"
+    pd.DataFrame(rows).to_csv(out, index=False)
+    print(f"wrote {out.relative_to(ROOT)}")
+
+
 def main():
+    if "--coverage-check" in sys.argv:
+        key = map_key()
+        return coverage_check(key, availability(key))
     refresh_nrt = "--refresh-nrt" in sys.argv
     key = map_key()
     today = date.today()

@@ -145,3 +145,10 @@ def live_gaps(complete):
     pm = g.groupby(["sensor_missing", "year", "month"]).agg(gap_days=("date", "size"),
                                                            dates=("date", list)).reset_index()
     return pm
+
+
+def snpp_coverage():
+    """Per-day global S-NPP vs NOAA-20 row counts for live gap days (fetch_firms.py --coverage-check)."""
+    p = ROOT / "pipeline" / "ref" / f"snpp_coverage_{LIVE_YEAR}.csv"
+    return pd.read_csv(p, dtype={"date": str}) if p.exists() else pd.DataFrame(
+        columns=["date", "snpp_world_rows", "noaa20_world_rows", "snpp_missing"])

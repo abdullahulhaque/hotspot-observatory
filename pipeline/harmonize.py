@@ -4,9 +4,11 @@ Model b (approved): log1p(VIIRS) = a + b*log1p(MODIS), national monthly daytime
 active 0.1-degree cell-days, fitted 2012-2019 excluding gap-flagged months.
 Refitted here from the same inputs and checked against Task 2's parameters.
 
-harmonized (day):  2003-2011 back-cast; VIIRS-gap months gap-filled (archive years only);
-else raw_viirs. Live year (2026, FIRMS area API, see live.py): complete months only,
-harmonized = observed VIIRS, `nrt` marks months containing NRT data.
+harmonized (day):  2003-2011 back-cast; VIIRS-gap months gap-filled; else raw_viirs.
+Live year (2026, FIRMS area API, see live.py): complete months only, `nrt` marks
+months containing NRT data. A live VIIRS-gap month is gap-filled only when every
+gap day is confirmed as missing S-NPP coverage (zero S-NPP rows worldwide while
+NOAA-20 has rows; pipeline/ref/snpp_coverage_<year>.csv), else harmonized = observed.
 Model months are distributed to cells pro rata to MODIS cell-days.
 80% interval: leave-one-year-out residuals on 2012-2019.
 
@@ -41,7 +43,7 @@ BACKCAST_END, TRAIN = 2011, (2012, 2019)
 TEST = (2020, 2025)
 TASK2_PARAMS = (1.662, 0.9141)
 CALIBRATION = "model_b_v1"
-CONTRACT = "harmonized_schema v0.4"
+CONTRACT = "harmonized_schema v0.4.1"
 
 SCHEMA = pa.schema([("lat", pa.float64(), False), ("lon", pa.float64(), False),
                     ("year", pa.int16(), False), ("month", pa.int8(), False),
@@ -133,7 +135,7 @@ def backcast_overpass_check(diag):
             "verdict": "confirmed" if ok else "refuted"}
 
 
-def known_limitations(nat):
+def known_limitations(nat, q_lo, live_info):
     diag = sensor_diagnostics()
     bchk = backcast_overpass_check(diag)
     ann = nat[nat.year.between(*TEST)].groupby("year")[["VIIRS", "pred"]].sum()
@@ -148,7 +150,7 @@ def known_limitations(nat):
                    "the diurnal fire cycle, so the MODIS-VIIRS relation is not the trained one. This is "
                    "consistent with (not proven to cause) model b over-predicting 2024 and 2025 "
                    "(annual error % by year, scored months: " + json.dumps(err) + "). Affects gap-filled "
-                   "months from 2023 (2024-07). Does not affect the 2003-2011 back-cast or 2012-2022 values.",
+                   "months from 2023 (2024-07, 2026-07). Does not affect the 2003-2011 back-cast or 2012-2022 values.",
          "action": "None taken (diagnostic only, no refit)."},
         {"id": "modis_version_change",
          "finding": "MODIS version field: 6.2 (2012-2017), 6.03 (2018-2022), 61.03 (2023-2025). VIIRS "
@@ -171,8 +173,41 @@ def known_limitations(nat):
                     "is likely high, drift period: model b over-predicts the surrounding 2024 months "
                     "(Jun +32%, Aug +23%, Sep +25%) while Aqua's overpass has drifted to ~14:31.",
          "status": "likely high, drift period", "action": "None taken (no refit)."},
+        *live_limitations(nat, q_lo, live_info),
+        {"id": "cell_boundary_straddling",
+         "finding": "A fire or burn scar that straddles a 0.1 deg cell boundary counts once in each cell it "
+                    "touches, so one event can add more than one cell-day per day. Pixel footprints differ "
+                    "(MODIS ~1 km, VIIRS 375 m), so the chance of straddling differs by sensor; model b absorbs "
+                    "the average effect nationally but not event by event.",
+         "action": "None taken; inherent to the gridded unit."},
         {"id": "diagnostic_table", "rows": diag},
     ]
+
+
+def live_limitations(nat, q_lo, live_info):
+    out = []
+    by = nat.set_index(["year", "month"])
+    for mstr in live_info["gap_filled"]:
+        y, mo = map(int, mstr.split("-"))
+        r = by.loc[(y, mo)]
+        out.append({"id": f"gapfill_{y}_{mo:02d}",
+                    "finding": f"Gap-filled live-year month {mstr} (harmonized {r.harmonized:,.0f}, 80% "
+                               f"{r.lo80:,.0f}-{r.hi80:,.0f}, vs raw VIIRS {r.VIIRS:,.0f}). S-NPP coverage missing "
+                               f"on {', '.join(live_info['confirmed_days'][mstr])} (zero S-NPP rows worldwide, "
+                               f"NOAA-20 present). This is a drift-period estimate, model b runs high since 2023.",
+                    "status": "drift-period estimate, model b runs high since 2023",
+                    "action": "None taken (no refit)."})
+    for g in live_info["under_threshold"]:
+        y, mo = map(int, g["month"].split("-"))
+        r = by.loc[(y, mo)]
+        out.append({"id": f"live_{y}_{mo:02d}_missing_viirs_days",
+                    "finding": f"{g['month']} has {g['gap_days']} days without S-NPP data "
+                               f"({', '.join(g['dates'])}; confirmed missing coverage: {g['confirmed']}), under "
+                               f"the >{GAP_DAYS_MAX}-day threshold, so it is not gap-flagged or filled. raw VIIRS "
+                               f"{r.VIIRS:,.0f} is under-counted by roughly the activity on those days "
+                               f"(model b from MODIS: {r.pred:,.0f}, which itself runs high since 2023).",
+                    "action": "None taken (below threshold)."})
+    return out
 
 
 def fit_b(df):
@@ -216,6 +251,23 @@ def main():
                    "gap_days": int(r.gap_days), "live": True} for r in lg_fl.itertuples()]
     flagged = {(f["year"], f["month"]) for f in flag_list}
     nrt_set = (live.nrt_months("MODIS") | live.nrt_months("VIIRS")) & live_comp
+    cov = live.snpp_coverage()
+    missing_days = set(cov.date[cov.snpp_missing.astype(bool)])
+    lv = lg[lg.sensor_missing == "VIIRS"]
+    live_info = {"gap_filled": [], "flagged_not_filled": [], "confirmed_days": {}, "under_threshold": []}
+    live_fill = set()
+    for r in lv.itertuples():
+        mstr, ok = f"{r.year}-{r.month:02d}", all(d in missing_days for d in r.dates)
+        if r.gap_days > GAP_DAYS_MAX:
+            if ok:
+                live_fill.add((r.year, r.month))
+                live_info["gap_filled"].append(mstr)
+                live_info["confirmed_days"][mstr] = list(r.dates)
+            else:
+                live_info["flagged_not_filled"].append(mstr)
+        elif r.gap_days == GAP_DAYS_MAX:
+            live_info["under_threshold"].append({"month": mstr, "gap_days": int(r.gap_days),
+                                                 "dates": list(r.dates), "confirmed": bool(ok)})
 
     # ---------------- national daytime monthly ---------------------------
     nat = c[c.daynight == "D"].groupby(["year", "month"])[["MODIS", "VIIRS"]].sum(min_count=1)
@@ -274,7 +326,7 @@ def main():
 
     # ---------------- harmonized national --------------------------------
     back = nat.year <= BACKCAST_END
-    fill = pd.Series([k in viirs_gap and k[0] != LIVE_YEAR for k in ym])
+    fill = pd.Series([(k in viirs_gap and k[0] != LIVE_YEAR) or k in live_fill for k in ym])
     model = back | fill
     nat["source"] = np.select([back, fill], ["backcast", "gapfill"], "observed")
     nat["harmonized"] = np.where(model, nat.pred, nat.VIIRS)
@@ -413,8 +465,16 @@ def main():
                                      for s in ("MODIS", "VIIRS")},
             "gap_days_by_month": [{**{k: (int(v) if k != "dates" and k != "sensor_missing" else v)
                                       for k, v in r.items()}} for r in lg.to_dict("records")],
-            "gap_flagged_not_filled": [f"{f['year']}-{f['month']:02d}" for f in flag_list if f.get("live")
-                                       and f["sensor_missing"] == "VIIRS"],
+            "gap_filled": live_info["gap_filled"],
+            "gap_flagged_not_filled": live_info["flagged_not_filled"],
+            "missing_viirs_days_under_threshold": live_info["under_threshold"],
+            "snpp_coverage_check": {
+                "rule": "a live VIIRS-gap month is gap-filled only if every gap day has zero S-NPP rows worldwide "
+                        "while NOAA-20 has rows (missing coverage, not a quiet day). /api/data_availability gives "
+                        "only a min..max date per source (VIIRS_SNPP_SP 2012-01-20..2026-07-31), so it cannot show "
+                        "days missing inside the range.",
+                "file": f"pipeline/ref/snpp_coverage_{LIVE_YEAR}.csv",
+                "days": cov.to_dict("records")},
             "clip": {"method": "point in Natural Earth 10m Argentina polygon (pipeline/ref/argentina_ne10m.geojson)",
                      "validation_2019_vs_country_archive": {"MODIS_annual_celldays_pct": 0.0,
                                                             "VIIRS_annual_celldays_pct": -0.01,
@@ -429,6 +489,7 @@ def main():
                 "no_filter_celldays_pct": {"VIIRS": {"2025": 1.65, "2026_SP": 3.87},
                                            "MODIS": {"2025": 2.83, "2026_SP": 5.36}}},
             "not_in_scoring": "Live-year months are not part of the test set."},
+        "latest_complete_month": f"{LIVE_YEAR}-{max(live_comp)[1]:02d}",
         "scores_test": scores,
         "scores_by_period": scores_by_period,
         "interval_80": intervals,
@@ -441,8 +502,9 @@ def main():
         "notes": ["Scores exclude all gap-flagged months.",
                   "Back-cast and gap-fill lo80/hi80 use the leave-one-year-out interval.",
                   "Training (2012-2019) and model b coefficients unchanged when 2025 was added; back-cast values identical.",
-                  "Live year: harmonized = observed VIIRS, including gap-flagged months (not gap-filled)."],
-        "known_limitations": known_limitations(nat)}
+                  "Live year: harmonized = observed VIIRS, except VIIRS-gap months whose missing days are "
+                  "confirmed as missing S-NPP coverage, which are gap-filled with model b."],
+        "known_limitations": known_limitations(nat, q_lo, live_info)}
     (OUT / "validation.json").write_text(json.dumps(validation, indent=2))
 
     print("\nEARLY AQUA GAP CHECK 2003-2011 (Aqua zero rows, Terra has rows), all months with >=1 day\n")
