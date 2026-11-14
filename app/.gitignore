@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+.pytest_cache/
+web/node_modules/
+web/.npm-cache/
+web/.playwright/
+web/dist/
+web/test-results/
+web/playwright-report/
+*.log
