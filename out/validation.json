@@ -1,0 +1,239 @@
+{
+  "calibration": "model_b_v1",
+  "contract": "harmonized_schema v0.3",
+  "unit": "active_cell_days_0.1deg",
+  "daynight": "D",
+  "model": {
+    "form": "log1p(viirs) = a + b*log1p(modis)",
+    "a": 1.6622433456917138,
+    "b": 0.9141396660478257,
+    "train_years": [
+      2012,
+      2013,
+      2014,
+      2015,
+      2016,
+      2017,
+      2018,
+      2019
+    ],
+    "train_excluded_months": [
+      "2012-01",
+      "2014-05",
+      "2016-05",
+      "2019-05"
+    ]
+  },
+  "test_years": [
+    2020,
+    2021,
+    2022,
+    2023,
+    2024
+  ],
+  "test_excluded_months": [
+    "2022-04",
+    "2022-07",
+    "2022-08",
+    "2024-04",
+    "2024-07"
+  ],
+  "scores_test": {
+    "raw_modis": {
+      "monthly": {
+        "MAPE_pct": 66.59155661517264,
+        "R2": 0.10697546359142862,
+        "bias_pct": -63.095686717854505
+      },
+      "annual": {
+        "MAPE_pct": 63.05596747950718,
+        "R2": -1.7599272380391033,
+        "bias_pct": -63.095686717854505
+      }
+    },
+    "model_b": {
+      "monthly": {
+        "MAPE_pct": 11.590525816188187,
+        "R2": 0.9754301583136327,
+        "bias_pct": -0.45228680678069966
+      },
+      "annual": {
+        "MAPE_pct": 5.347548561886178,
+        "R2": 0.9840644590459421,
+        "bias_pct": -0.45228680678069966
+      }
+    }
+  },
+  "interval_80": {
+    "in_sample": {
+      "monthly_log_q10_q90": [
+        -0.18734879461998147,
+        0.18327905939169362
+      ],
+      "monthly_test_coverage": 0.7272727272727273,
+      "annual_log_q10_q90": [
+        -0.045730917913561216,
+        0.043211249281756875
+      ],
+      "annual_test_coverage": 0.6
+    },
+    "leave_one_year_out": {
+      "monthly_log_q10_q90": [
+        -0.1812165677178844,
+        0.17822905943254963
+      ],
+      "monthly_test_coverage": 0.7272727272727273,
+      "annual_log_q10_q90": [
+        -0.054922009967323916,
+        0.04857353515902636
+      ],
+      "annual_test_coverage": 0.6
+    },
+    "nominal": 0.8,
+    "test_months_n": 55,
+    "test_years_n": 5
+  },
+  "join_check_2012": {
+    "months_compared": [
+      "2012-02",
+      "2012-03",
+      "2012-04",
+      "2012-05",
+      "2012-06",
+      "2012-07",
+      "2012-08",
+      "2012-09",
+      "2012-10",
+      "2012-11",
+      "2012-12"
+    ],
+    "observed_viirs": 49818.0,
+    "model_b": 49799.54320277204,
+    "difference_pct": 0.037062181781077896,
+    "annual_band_pct": [
+      -5.3441032760352964,
+      4.977256417456241
+    ],
+    "band": "annual 80% leave-one-year-out",
+    "pass": true,
+    "harmonized_annual_2011": 60562.43976149409,
+    "harmonized_annual_2012": 53737.48872363569
+  },
+  "gap_flagged_months": [
+    {
+      "year": 2005,
+      "month": 6,
+      "sensor_missing": "MODIS",
+      "reference": "MODIS Terra",
+      "gap_days": 5,
+      "month_str": "2005-06"
+    },
+    {
+      "year": 2012,
+      "month": 1,
+      "sensor_missing": "VIIRS",
+      "reference": "MODIS Aqua",
+      "gap_days": 19,
+      "month_str": "2012-01"
+    },
+    {
+      "year": 2014,
+      "month": 5,
+      "sensor_missing": "MODIS",
+      "reference": "VIIRS",
+      "gap_days": 4,
+      "month_str": "2014-05"
+    },
+    {
+      "year": 2016,
+      "month": 5,
+      "sensor_missing": "MODIS",
+      "reference": "VIIRS",
+      "gap_days": 5,
+      "month_str": "2016-05"
+    },
+    {
+      "year": 2019,
+      "month": 5,
+      "sensor_missing": "MODIS",
+      "reference": "VIIRS",
+      "gap_days": 6,
+      "month_str": "2019-05"
+    },
+    {
+      "year": 2022,
+      "month": 4,
+      "sensor_missing": "MODIS",
+      "reference": "VIIRS",
+      "gap_days": 16,
+      "month_str": "2022-04"
+    },
+    {
+      "year": 2022,
+      "month": 7,
+      "sensor_missing": "VIIRS",
+      "reference": "MODIS Aqua",
+      "gap_days": 5,
+      "month_str": "2022-07"
+    },
+    {
+      "year": 2022,
+      "month": 8,
+      "sensor_missing": "VIIRS",
+      "reference": "MODIS Aqua",
+      "gap_days": 10,
+      "month_str": "2022-08"
+    },
+    {
+      "year": 2024,
+      "month": 4,
+      "sensor_missing": "MODIS",
+      "reference": "VIIRS",
+      "gap_days": 5,
+      "month_str": "2024-04"
+    },
+    {
+      "year": 2024,
+      "month": 7,
+      "sensor_missing": "VIIRS",
+      "reference": "MODIS Aqua",
+      "gap_days": 11,
+      "month_str": "2024-07"
+    }
+  ],
+  "gap_filled_months": [
+    {
+      "month": "2012-01",
+      "raw_viirs": 1289.0,
+      "harmonized": 3919.4887236356926,
+      "lo80": 3269.686012658368,
+      "hi80": 4684.37230442957
+    },
+    {
+      "month": "2022-07",
+      "raw_viirs": 3055.0,
+      "harmonized": 4557.039051006777,
+      "lo80": 3801.5653483970555,
+      "hi80": 5446.308087725057
+    },
+    {
+      "month": "2022-08",
+      "raw_viirs": 8133.0,
+      "harmonized": 10004.439260276551,
+      "lo80": 8346.08439327992,
+      "hi80": 11956.490840651693
+    },
+    {
+      "month": "2024-07",
+      "raw_viirs": 3773.0,
+      "harmonized": 6533.057639498506,
+      "lo80": 5450.068076939374,
+      "hi80": 7807.846003072339
+    }
+  ],
+  "notes": [
+    "Scores exclude all gap-flagged months.",
+    "Back-cast and gap-fill lo80/hi80 use the leave-one-year-out interval.",
+    "VIIRS 2025 not on disk; test years end 2024."
+  ]
+}
