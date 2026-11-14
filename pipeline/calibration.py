@@ -60,7 +60,7 @@ def load_year(sensor, year):
 
 
 def build():
-    daily, cells, present = [], [], {}
+    daily, cells, present, spans = [], [], {}, {}
     for sensor in ["MODIS", "VIIRS"]:
         present[sensor] = []
         for y in YEARS:
@@ -68,6 +68,7 @@ def build():
             if df is None:
                 continue
             present[sensor].append(y)
+            spans[(sensor, y)] = (df.date.min(), df.date.max())
             # any row of the satellite counts for outage detection
             daily.append(df.groupby("date").size().rename("rows").reset_index().assign(sensor=sensor))
             if sensor == "MODIS":
@@ -81,7 +82,20 @@ def build():
             d["year"], d["month"] = d.date.dt.year, d.date.dt.month
             cells.append(d.groupby(["year", "month", "blat", "blon"]).size()
                          .rename("cd").reset_index().assign(sensor=sensor))
-    return pd.concat(daily), pd.concat(cells), present
+    return pd.concat(daily), pd.concat(cells), present, spans
+
+
+def complete_months(spans, years):
+    """(year, month) pairs fully inside both sensors' first..last acq_date for that year."""
+    out = set()
+    for y in years:
+        lo = max(spans[(s, y)][0] for s in ("MODIS", "VIIRS"))
+        hi = min(spans[(s, y)][1] for s in ("MODIS", "VIIRS"))
+        for m in range(1, 13):
+            start = pd.Timestamp(y, m, 1)
+            if start >= lo and start + pd.offsets.MonthEnd(0) <= hi:
+                out.add((y, m))
+    return out
 
 
 # ---------------------------------------------------------------- gaps ----
@@ -324,10 +338,13 @@ def mix_decomposition(btr, path):
 # ---------------------------------------------------------------- main ----
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    daily, cells, present = build()
+    daily, cells, present, spans = build()
     L = [f"# Task 2 — calibration and validation (daytime cell-days)\n\n"
          f"Years on disk: MODIS Aqua {present['MODIS'][0]}–{present['MODIS'][-1]} "
-         f"({len(present['MODIS'])} yrs); VIIRS S-NPP {present['VIIRS']}\n"]
+         f"({len(present['MODIS'])} yrs); VIIRS S-NPP {present['VIIRS']}\n\n"
+         "acq_date span per file:\n\n"
+         + pd.DataFrame([{"sensor": s, "year": y, "first": a.date(), "last": b.date()}
+                         for (s, y), (a, b) in sorted(spans.items())]).to_markdown(index=False) + "\n"]
     missing = sorted(set(YEARS) - set(present["VIIRS"]))
     if missing:
         L.append(f"VIIRS missing: {missing}\n")
@@ -356,8 +373,14 @@ def main():
     full = (cells.groupby(["year", "month", "sensor"]).cd.sum().unstack("sensor").fillna(0)
             .rename(columns={"MODIS": "modis_celldays_D", "VIIRS": "viirs_celldays_D"}).astype(int))
     full.to_csv(OUT / "monthly_celldays_day.csv")
+    comp = complete_months(spans, both)
+    nat["complete"] = [(y, m) in comp for y, m in zip(nat.year, nat.month)]
+    inc = sorted(set(nat.year[~nat.complete]))
+    L.append("\n## Complete months\n\n" + (f"Incomplete months excluded: "
+             f"{[f'{y}-{m:02d}' for y, m in zip(nat.year[~nat.complete], nat.month[~nat.complete])]}"
+             if inc else "All months of every year are complete for both sensors.") + "\n")
     nat = nat.set_index(["year", "month"], drop=False).rename_axis(["yr", "mo"])
-    use = ~nat.gap_flag
+    use = ~nat.gap_flag & nat.complete
 
     blk = (cells[cells.year.isin(both)].pivot_table(index=["blat", "blon"], columns=["sensor"],
                                                     values="cd", aggfunc="sum").index)
@@ -370,12 +393,11 @@ def main():
 
     preds, params, binfo = fit_predict(nat, bcd, use & (nat.year <= TRAIN_END))
     binfo.to_csv(OUT / "block_fits.csv", index=False)
-    preds.assign(actual_viirs=nat.viirs, gap_flag=nat.gap_flag).to_csv(OUT / "predictions_monthly.csv")
+    preds.assign(actual_viirs=nat.viirs, gap_flag=nat.gap_flag, complete=nat.complete).to_csv(
+        OUT / "predictions_monthly.csv")
     res = evaluate(nat, preds, use)
     res.round(3).to_csv(OUT / "model_comparison.csv", index=False)
-    test = res[res.split == "test"].set_index("model")
-    # best = lowest annual test MAPE (the back-cast delivers annual totals); ties broken by |bias|
-    best = test.loc[MODELS].assign(ab=lambda t: t["annual_bias_%"].abs()).sort_values(["annual_MAPE_%", "ab"]).index[0]
+    best = "b_power"   # approved after Task 2 (lowest annual test MAPE, ~zero bias)
 
     L.append("\n## Parameters\n\n" + "\n".join(f"- {k}: " + ", ".join(f"{a}={v:.4g}" for a, v in p.items())
                                                for k, p in params.items()) + "\n")

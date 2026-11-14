@@ -26,15 +26,15 @@ import pyarrow.parquet as pq
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from calibration import (BASE, GAP_DAYS_MAX, GRID, INK, INK2, MODIS_C, MUTED, PI, SURFACE,  # noqa: E402
-                         VIIRS_C, cell, load_year, score, style)
+                         VIIRS_C, cell, complete_months, load_year, score, style)
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "out"
 T2 = OUT / "task2"
-MODIS_YEARS = range(2003, 2025)
-VIIRS_YEARS = range(2012, 2025)
+MODIS_YEARS = range(2003, 2026)
+VIIRS_YEARS = range(2012, 2026)
 BACKCAST_END, TRAIN = 2011, (2012, 2019)
-TEST = (2020, 2024)
+TEST = (2020, 2025)
 TASK2_PARAMS = (1.662, 0.9141)
 CALIBRATION = "model_b_v1"
 CONTRACT = "harmonized_schema v0.3"
@@ -46,12 +46,13 @@ SCHEMA = pa.schema([("lat", pa.float64(), False), ("lon", pa.float64(), False),
                     ("source", pa.string(), False), ("gap_flag", pa.bool_(), False)])
 
 
-def cell_days(sensor, years):
+def cell_days(sensor, years, spans):
     parts = []
     for y in years:
         df = load_year(sensor, y)
         if df is None:
             raise FileNotFoundError(f"{sensor} {y} not on disk")
+        spans[(sensor, y)] = (df.date.min(), df.date.max())
         keep = (pd.to_numeric(df.confidence) >= 30) if sensor == "MODIS" else (df.confidence.str.lower() != "l")
         d = df[keep & (df.type == 0)].copy()
         d["lat"], d["lon"] = cell(d.latitude), cell(d.longitude)
@@ -75,6 +76,52 @@ def early_aqua_gaps():
     pm = (g.groupby(["year", "month"]).agg(gap_days=("date", "size"), median_terra_rows=("terra_rows", "median"),
                                            dates=("date", list)).reset_index())
     return g, pm
+
+
+def sensor_diagnostics():
+    """Version field by year (both sensors) and daytime overpass time by year, 2012+. Diagnostic only."""
+    rows = []
+    for sensor, sat in [("MODIS", "Aqua"), ("VIIRS", "N")]:
+        for y in VIIRS_YEARS:
+            p = (ROOT / f"modis/{y}/modis_{y}_Argentina.csv" if sensor == "MODIS"
+                 else ROOT / f"viirs-snpp/{y}/viirs-snpp_{y}_Argentina.csv")
+            d = pd.read_csv(p, usecols=["longitude", "acq_time", "satellite", "version", "daynight"],
+                            dtype={"acq_time": str, "version": str})
+            d = d[d.satellite == sat]
+            dd = d[d.daynight == "D"]
+            utc = dd.acq_time.str[:2].astype(int) * 60 + dd.acq_time.str[2:].astype(int)
+            lst = (utc + dd.longitude * 4) % 1440          # local solar time removes fire-location shifts
+            rows.append({"sensor": f"{sensor} {'Aqua' if sensor == 'MODIS' else 'S-NPP'}", "year": y,
+                         "version": {k: int(v) for k, v in d.version.value_counts().items()},
+                         "median_day_acq_time_utc": f"{int(utc.median()) // 60:02d}:{int(utc.median()) % 60:02d}",
+                         "median_day_local_solar_time": f"{int(lst.median()) // 60:02d}:{int(lst.median()) % 60:02d}"})
+    return rows
+
+
+def known_limitations(nat):
+    diag = sensor_diagnostics()
+    ann = nat[nat.year >= TEST[0]].groupby("year")[["VIIRS", "pred"]].sum()
+    err = {int(y): round(float((r.pred - r.VIIRS) / r.VIIRS * 100), 1) for y, r in ann.iterrows()}
+    return [
+        {"id": "aqua_overpass_drift",
+         "finding": "MODIS Aqua's median daytime overpass is stable at ~13:52-13:57 local solar time through "
+                    "2022, then moves later: 14:09 (2023), 14:31 (2024), 15:02 (2025). VIIRS S-NPP stays at "
+                    "13:46-13:54 throughout. No change around 2020; the drift begins in 2023 and accelerates "
+                    "through 2024-2025.",
+         "impact": "Model b was fitted with both sensors at ~13:50. From 2023 MODIS samples a later part of "
+                   "the diurnal fire cycle, so the MODIS-VIIRS relation is not the trained one. This is "
+                   "consistent with (not proven to cause) model b over-predicting 2024 and 2025 "
+                   "(annual error % by year, scored months: " + json.dumps(err) + "). Affects gap-filled "
+                   "months from 2023 (2024-07). Does not affect the 2003-2011 back-cast or 2012-2022 values.",
+         "action": "None taken (diagnostic only, no refit)."},
+        {"id": "modis_version_change",
+         "finding": "MODIS version field: 6.2 (2012-2017), 6.03 (2018-2022), 61.03 (2023-2025). VIIRS "
+                    "version is 2 in every year 2012-2025. No version change around 2020 or 2024; the MODIS "
+                    "change in 2023 coincides with the start of the overpass drift, so the two cannot be "
+                    "separated with this data.",
+         "action": "None taken."},
+        {"id": "diagnostic_table", "rows": diag},
+    ]
 
 
 def fit_b(df):
@@ -101,8 +148,10 @@ def main():
     viirs_gap = {(f["year"], f["month"]) for f in flag_list if f["sensor_missing"] == "VIIRS"}
     train_excl = set(map(tuple, t2g[["year", "month"]].values))   # Task 2 exclusions, unchanged
 
-    m = cell_days("MODIS", MODIS_YEARS)
-    v = cell_days("VIIRS", VIIRS_YEARS)
+    spans = {}
+    m = cell_days("MODIS", MODIS_YEARS, spans)
+    v = cell_days("VIIRS", VIIRS_YEARS, spans)
+    comp = complete_months(spans, VIIRS_YEARS)
     c = pd.concat([m, v], axis=1).reset_index()
 
     # ---------------- national daytime monthly ---------------------------
@@ -113,6 +162,7 @@ def main():
     ym = list(zip(nat.year, nat.month))
     nat["gap_flag"] = [k in flagged for k in ym]
     nat["excluded"] = [k in train_excl for k in ym]
+    nat["complete"] = [k in comp or y <= BACKCAST_END for k, y in zip(ym, nat.year)]
 
     t2 = pd.read_csv(T2 / "monthly_celldays_day.csv")
     chk = nat.merge(t2, on=["year", "month"])
@@ -139,7 +189,7 @@ def main():
     aq_in = np.quantile(np.log(ann_tr.VIIRS / ann_tr.pred), PI)
     aq_lo = np.quantile(np.log(ann_tr.VIIRS / ann_tr.pred_loyo), PI)
 
-    tem = nat.year.between(*TEST) & ~nat.gap_flag
+    tem = nat.year.between(*TEST) & ~nat.gap_flag & nat.complete
     te = nat[tem]
     ann_te = te.groupby("year")[["VIIRS", "MODIS", "pred"]].sum()
 
@@ -255,6 +305,9 @@ def main():
                   "train_excluded_months": sorted(f"{y}-{mo:02d}" for y, mo in train_excl if TRAIN[0] <= y <= TRAIN[1])},
         "test_years": list(range(TEST[0], TEST[1] + 1)),
         "test_excluded_months": sorted(f"{y}-{mo:02d}" for y, mo in flagged if TEST[0] <= y <= TEST[1]),
+        "test_complete_month_rule": "month lies within both sensors' first..last acq_date for the year",
+        "acq_date_spans": {f"{s} {y}": [str(a.date()), str(b.date())] for (s, y), (a, b) in sorted(spans.items())},
+        "incomplete_months": [f"{y}-{mo:02d}" for (y, mo) in sorted(set(ym) - comp) if y >= VIIRS_YEARS[0]],
         "scores_test": scores,
         "interval_80": intervals,
         "join_check_2012": join,
@@ -265,7 +318,8 @@ def main():
                               for r in filled.itertuples()],
         "notes": ["Scores exclude all gap-flagged months.",
                   "Back-cast and gap-fill lo80/hi80 use the leave-one-year-out interval.",
-                  "VIIRS 2025 not on disk; test years end 2024."]}
+                  "Training (2012-2019) and model b coefficients unchanged when 2025 was added; back-cast values identical."],
+        "known_limitations": known_limitations(nat)}
     (OUT / "validation.json").write_text(json.dumps(validation, indent=2))
 
     print("\nEARLY AQUA GAP CHECK 2003-2011 (Aqua zero rows, Terra has rows), all months with >=1 day\n")
@@ -304,7 +358,7 @@ def chart(nat):
     ax.set_ylabel("daytime active 0.1° cell-days per month", color=INK2)
     ax.set_xlim(x.min() - pd.Timedelta(days=60), x.max() + pd.Timedelta(days=60))
     ax.legend(frameon=False, fontsize=9, loc="upper center", labelcolor=INK, bbox_to_anchor=(0.5, -0.07), ncol=6)
-    ax.set_title("Argentina national daytime fire activity, 2003–2024 (model b, calibration model_b_v1)",
+    ax.set_title("Argentina national daytime fire activity, 2003–2025 (model b, calibration model_b_v1)",
                  loc="left", fontsize=12, color=INK)
     fig.tight_layout()
     fig.savefig(OUT / "chart_national_series.png", dpi=150, facecolor=SURFACE)

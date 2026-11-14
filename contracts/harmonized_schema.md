@@ -11,8 +11,7 @@ daynight). Consumers: `app/` and anything downstream.
 Companion files: `out/national_monthly.parquet` and `out/validation.json`
 (see below).
 
-Coverage: Argentina, 2003–2024. VIIRS 2025 is not yet on disk; 2025 will be
-added when it is.
+Coverage: Argentina, 2003–2025 (2025 complete for both sensors, 1 Jan–31 Dec).
 
 ## Columns
 
@@ -23,11 +22,11 @@ added when it is.
 | `year`       | int16    | no       | Calendar year of acquisition (UTC, from `acq_date`). |
 | `month`      | int8     | no       | Calendar month 1–12 (UTC, from `acq_date`). |
 | `daynight`   | string   | no       | `"D"` or `"N"`, taken from the FIRMS `daynight` flag. Day and night are never mixed. |
-| `raw_modis`  | float64  | yes      | MODIS Aqua active cell-days in this cell/month/daynight, after filters. `0` = covered, no activity. Filled for every year 2003–2024. |
+| `raw_modis`  | float64  | yes      | MODIS Aqua active cell-days in this cell/month/daynight, after filters. `0` = covered, no activity. Filled for every year 2003–2025. |
 | `raw_viirs`  | float64  | yes      | VIIRS S-NPP active cell-days, same unit and filters. `null` for 2003–2011 (before VIIRS); filled from 2012, always as observed, including gap months. |
 | `harmonized` | float64  | yes      | Activity on the VIIRS S-NPP scale across both eras. See *Harmonized values* below. |
 | `source`     | string   | no       | How `harmonized` was produced: `"backcast"` (day, 2003–2011, modelled from MODIS), `"gapfill"` (day, VIIRS-gap months, modelled from MODIS; **new in v0.3**), `"observed"` (everything else). |
-| `gap_flag`   | bool     | no       | `true` if the month (all cells, both day and night) is a flagged sensor data gap: more than 3 days with zero national rows from one sensor while the reference sensor had rows. References: 2012–2024, MODIS Aqua ↔ VIIRS S-NPP; 2003–2011, Aqua vs MODIS Terra (**new in v0.3**). The sensor that was missing is listed in `validation.json`. |
+| `gap_flag`   | bool     | no       | `true` if the month (all cells, both day and night) is a flagged sensor data gap: more than 3 days with zero national rows from one sensor while the reference sensor had rows. References: 2012–2025, MODIS Aqua ↔ VIIRS S-NPP; 2003–2011, Aqua vs MODIS Terra (**new in v0.3**). The sensor that was missing is listed in `validation.json`. |
 
 ### Harmonized values
 
@@ -84,12 +83,19 @@ daytime cell-days, 2012–2019, with Task 2 gap-flagged months excluded.
 
 80% prediction interval (v0.3): log-residual quantiles from leave-one-year-out
 refits on 2012–2019. The monthly interval is ×exp(−0.181) to ×exp(+0.178).
-Test coverage 2020–2024 is 73% of months and 3 of 5 years, against a nominal
+Test coverage 2020–2025 is 70% of months and 3 of 6 years, against a nominal
 80%. Full scores are in `validation.json`.
+
+**Known limitation:** MODIS Aqua's daytime overpass drifts later from 2023
+(≈13:54 local solar time through 2022; 14:09 in 2023, 14:31 in 2024, 15:02 in 2025),
+while S-NPP stays at ≈13:50. Model b was trained before the drift, and it
+over-predicts 2024 (+12.8%) and 2025 (+11.7%). Modelled values from 2023 on
+(currently gap-fill 2024-07) carry this bias. The back-cast and 2012–2022 are not
+affected. Details under `known_limitations` in `validation.json`.
 
 ## `out/national_monthly.parquet`
 
-National daytime series, one row per (year, month), 2003–2024. Metadata as
+National daytime series, one row per (year, month), 2003–2025. Metadata as
 above plus `daynight = D`.
 
 | column       | type    | nullable | description |
@@ -105,14 +111,19 @@ above plus `daynight = D`.
 
 ## `out/validation.json`
 
-Test years; test scores for raw MODIS and model b (monthly and annual MAPE,
+Test years (2020–2025; only complete months: inside both sensors' first..last
+`acq_date`); the per-file `acq_date` spans; test scores for raw MODIS and model b (monthly and annual MAPE,
 R², bias); in-sample and leave-one-year-out interval quantiles with test
 coverage; the 2012 join check; the gap-flagged months, each with the missing
-sensor, reference sensor and day count; and the gap-filled months, each with
-raw VIIRS, filled value and interval.
+sensor, reference sensor and day count; the gap-filled months, each with
+raw VIIRS, filled value and interval; and `known_limitations` (sensor version
+and Aqua overpass-time diagnostics by year).
 
 ## Changelog
 
+- v0.3 (data refresh, no schema change) — VIIRS 2025 added; coverage 2003–2025;
+  test set 2020–2025 (complete months only); `known_limitations` added to
+  `validation.json`. Model b coefficients and back-cast values unchanged.
 - v0.3 — `source` gains `"gapfill"`: VIIRS-gap months use the model b
   prediction, distributed by MODIS as in the back-cast (`raw_viirs` unchanged).
   `gap_flag` now also covers 2003–2011 (Aqua vs Terra; flags 2005-06, not

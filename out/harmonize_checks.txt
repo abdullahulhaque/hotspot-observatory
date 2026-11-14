@@ -1,13 +1,13 @@
 model b refit: a=1.6622 b=0.9141
-harmonized.parquet: 576,195 rows; years 2003-2024
+harmonized.parquet: 606,607 rows; years 2003-2025
 |                   |   rows |
 |:------------------|-------:|
 | ('backcast', 'D') | 138429 |
 | ('gapfill', 'D')  |  10112 |
-| ('observed', 'D') | 319728 |
-| ('observed', 'N') | 107926 |
+| ('observed', 'D') | 343197 |
+| ('observed', 'N') | 114869 |
 
-CHECK cell sum == national (day), all 264 months: max |diff| = 3.64e-12
+CHECK cell sum == national (day), all 276 months: max |diff| = 3.64e-12
 CHECK night: harmonized null pre-2012, never modelled: OK
 
 EARLY AQUA GAP CHECK 2003-2011 (Aqua zero rows, Terra has rows), all months with >=1 day
@@ -45,28 +45,28 @@ INTERVALS
    -0.18734879461998147,
    0.18327905939169362
   ],
-  "monthly_test_coverage": 0.7272727272727273,
+  "monthly_test_coverage": 0.7164179104477612,
   "annual_log_q10_q90": [
    -0.045730917913561216,
    0.043211249281756875
   ],
-  "annual_test_coverage": 0.6
+  "annual_test_coverage": 0.5
  },
  "leave_one_year_out": {
   "monthly_log_q10_q90": [
    -0.1812165677178844,
    0.17822905943254963
   ],
-  "monthly_test_coverage": 0.7272727272727273,
+  "monthly_test_coverage": 0.7014925373134329,
   "annual_log_q10_q90": [
    -0.054922009967323916,
    0.04857353515902636
   ],
-  "annual_test_coverage": 0.6
+  "annual_test_coverage": 0.5
  },
  "nominal": 0.8,
- "test_months_n": 55,
- "test_years_n": 5
+ "test_months_n": 67,
+ "test_years_n": 6
 }
 
 JOIN YEARS
@@ -162,26 +162,26 @@ SCORES
 {
  "raw_modis": {
   "monthly": {
-   "MAPE_pct": 66.59155661517264,
-   "R2": 0.10697546359142862,
-   "bias_pct": -63.095686717854505
+   "MAPE_pct": 65.73694229395751,
+   "R2": 0.0972687355103381,
+   "bias_pct": -62.63919446056663
   },
   "annual": {
-   "MAPE_pct": 63.05596747950718,
-   "R2": -1.7599272380391033,
-   "bias_pct": -63.095686717854505
+   "MAPE_pct": 62.52059789958931,
+   "R2": -1.9458785353167554,
+   "bias_pct": -62.63919446056663
   }
  },
  "model_b": {
   "monthly": {
-   "MAPE_pct": 11.590525816188187,
-   "R2": 0.9754301583136327,
-   "bias_pct": -0.45228680678069966
+   "MAPE_pct": 12.38919997765229,
+   "R2": 0.9671750698742312,
+   "bias_pct": 1.2597691380745728
   },
   "annual": {
-   "MAPE_pct": 5.347548561886178,
-   "R2": 0.9840644590459421,
-   "bias_pct": -0.45228680678069966
+   "MAPE_pct": 6.413619089968849,
+   "R2": 0.9739801174080596,
+   "bias_pct": 1.2597691380745923
   }
  }
 }
