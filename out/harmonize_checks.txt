@@ -1,13 +1,13 @@
 model b refit: a=1.6622 b=0.9141
-harmonized.parquet: 606,607 rows; years 2003-2025
+harmonized.parquet: 626,716 rows; years 2003-2026
 |                   |   rows |
 |:------------------|-------:|
 | ('backcast', 'D') | 138429 |
 | ('gapfill', 'D')  |  10112 |
-| ('observed', 'D') | 343197 |
-| ('observed', 'N') | 114869 |
+| ('observed', 'D') | 359646 |
+| ('observed', 'N') | 118529 |
 
-CHECK cell sum == national (day), all 276 months: max |diff| = 3.64e-12
+CHECK cell sum == national (day), all 286 months: max |diff| = 3.64e-12
 CHECK night: harmonized null pre-2012, never modelled: OK
 
 EARLY AQUA GAP CHECK 2003-2011 (Aqua zero rows, Terra has rows), all months with >=1 day
@@ -182,6 +182,99 @@ SCORES
    "MAPE_pct": 6.413619089968849,
    "R2": 0.9739801174080596,
    "bias_pct": 1.2597691380745923
+  }
+ }
+}
+
+SCORES BY PERIOD
+{
+ "definition": "test months only (complete, not gap-flagged); no refit",
+ "model_a_ratio": 2.75362763915547,
+ "2020-2022": {
+  "note": "stable Aqua orbit",
+  "months_n": 33,
+  "years_n": 3,
+  "model_a": {
+   "monthly": {
+    "MAPE_pct": 14.93027311121075,
+    "R2": 0.9469743850777854,
+    "bias_pct": -0.21781628152325766
+   },
+   "annual": {
+    "MAPE_pct": 4.499355765270452,
+    "R2": 0.9805370122701708,
+    "bias_pct": -0.21781628152325766
+   }
+  },
+  "model_b": {
+   "monthly": {
+    "MAPE_pct": 10.157249583418656,
+    "R2": 0.9873280386206688,
+    "bias_pct": -3.409571135735952
+   },
+   "annual": {
+    "MAPE_pct": 3.9216083568179747,
+    "R2": 0.9886711488938045,
+    "bias_pct": -3.409571135735968
+   }
+  }
+ },
+ "2023-2025": {
+  "note": "Aqua overpass drift",
+  "months_n": 34,
+  "years_n": 3,
+  "model_a": {
+   "monthly": {
+    "MAPE_pct": 17.041858929837172,
+    "R2": 0.8081879063633427,
+    "bias_pct": 7.959936170814899
+   },
+   "annual": {
+    "MAPE_pct": 8.451882084163405,
+    "R2": -0.365294190945062,
+    "bias_pct": 7.959936170814887
+   }
+  },
+  "model_b": {
+   "monthly": {
+    "MAPE_pct": 14.555504772055523,
+    "R2": 0.8849266029537688,
+    "bias_pct": 8.925732145328162
+   },
+   "annual": {
+    "MAPE_pct": 8.905629823119725,
+    "R2": -0.3981509662195437,
+    "bias_pct": 8.925732145328162
+   }
+  }
+ },
+ "2020-2025": {
+  "note": "all test years",
+  "months_n": 67,
+  "years_n": 6,
+  "model_a": {
+   "monthly": {
+    "MAPE_pct": 16.001824123648035,
+    "R2": 0.9231812145305086,
+    "bias_pct": 2.8777467544965276
+   },
+   "annual": {
+    "MAPE_pct": 6.475618924716929,
+    "R2": 0.9695290835771972,
+    "bias_pct": 2.8777467544965276
+   }
+  },
+  "model_b": {
+   "monthly": {
+    "MAPE_pct": 12.38919997765229,
+    "R2": 0.9671750698742312,
+    "bias_pct": 1.2597691380745728
+   },
+   "annual": {
+    "MAPE_pct": 6.413619089968849,
+    "R2": 0.9739801174080596,
+    "bias_pct": 1.2597691380745923
+   }
   }
  }
 }

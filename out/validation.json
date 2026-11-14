@@ -1,6 +1,6 @@
 {
   "calibration": "model_b_v1",
-  "contract": "harmonized_schema v0.3",
+  "contract": "harmonized_schema v0.4",
   "unit": "active_cell_days_0.1deg",
   "daynight": "D",
   "model": {
@@ -133,6 +133,10 @@
       "2025-01-01",
       "2025-12-31"
     ],
+    "MODIS 2026": [
+      "2026-01-01",
+      "2026-11-14"
+    ],
     "VIIRS 2012": [
       "2012-01-20",
       "2012-12-31"
@@ -188,11 +192,267 @@
     "VIIRS 2025": [
       "2025-01-01",
       "2025-12-31"
+    ],
+    "VIIRS 2026": [
+      "2026-01-01",
+      "2026-11-02"
     ]
   },
   "incomplete_months": [
     "2012-01"
   ],
+  "live_year": {
+    "year": 2026,
+    "api": "FIRMS area API, bbox -74,-56,-53,-21, 5-day chunks; source per sensor from /api/data_availability (SP to its max_date, NRT after)",
+    "fetch": {
+      "MODIS": {
+        "sources": {
+          "MODIS_NRT": {
+            "requested": [
+              "2026-09-01",
+              "2026-11-14"
+            ],
+            "chunks": 15,
+            "rows_bbox_all_satellites": 16547
+          },
+          "MODIS_SP": {
+            "requested": [
+              "2026-01-01",
+              "2026-08-31"
+            ],
+            "chunks": 49,
+            "rows_bbox_all_satellites": 28359
+          }
+        },
+        "rows_argentina_this_satellite": {
+          "SP": 9521,
+          "NRT": 7799
+        },
+        "first_date": "2026-01-01",
+        "last_date": "2026-11-14",
+        "sp_last_requested": "2026-08-31",
+        "nrt_rows_inferred_static": 137
+      },
+      "VIIRS": {
+        "sources": {
+          "VIIRS_SNPP_NRT": {
+            "requested": [
+              "2026-08-01",
+              "2026-11-14"
+            ],
+            "chunks": 22,
+            "rows_bbox_all_satellites": 66819
+          },
+          "VIIRS_SNPP_SP": {
+            "requested": [
+              "2026-01-01",
+              "2026-07-31"
+            ],
+            "chunks": 43,
+            "rows_bbox_all_satellites": 97971
+          }
+        },
+        "rows_argentina_this_satellite": {
+          "SP": 47234,
+          "NRT": 41666
+        },
+        "first_date": "2026-01-01",
+        "last_date": "2026-11-02",
+        "sp_last_requested": "2026-07-31",
+        "nrt_rows_inferred_static": 1972
+      }
+    },
+    "months_appended": [
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+      "2026-09",
+      "2026-10"
+    ],
+    "months_held_back_incomplete": [
+      "2026-11"
+    ],
+    "last_date_covered": "2026-10-31",
+    "nrt_months": [
+      "2026-08",
+      "2026-09",
+      "2026-10"
+    ],
+    "nrt_months_by_sensor": {
+      "MODIS": [
+        "2026-09",
+        "2026-10"
+      ],
+      "VIIRS": [
+        "2026-08",
+        "2026-09",
+        "2026-10"
+      ]
+    },
+    "gap_days_by_month": [
+      {
+        "sensor_missing": "MODIS",
+        "year": 2026,
+        "month": 4,
+        "gap_days": 3,
+        "dates": [
+          "2026-04-07",
+          "2026-04-08",
+          "2026-04-20"
+        ]
+      },
+      {
+        "sensor_missing": "MODIS",
+        "year": 2026,
+        "month": 5,
+        "gap_days": 3,
+        "dates": [
+          "2026-05-03",
+          "2026-05-07",
+          "2026-05-30"
+        ]
+      },
+      {
+        "sensor_missing": "MODIS",
+        "year": 2026,
+        "month": 6,
+        "gap_days": 3,
+        "dates": [
+          "2026-06-09",
+          "2026-06-12",
+          "2026-06-26"
+        ]
+      },
+      {
+        "sensor_missing": "MODIS",
+        "year": 2026,
+        "month": 7,
+        "gap_days": 2,
+        "dates": [
+          "2026-07-21",
+          "2026-07-22"
+        ]
+      },
+      {
+        "sensor_missing": "MODIS",
+        "year": 2026,
+        "month": 8,
+        "gap_days": 1,
+        "dates": [
+          "2026-08-11"
+        ]
+      },
+      {
+        "sensor_missing": "MODIS",
+        "year": 2026,
+        "month": 10,
+        "gap_days": 2,
+        "dates": [
+          "2026-10-10",
+          "2026-10-12"
+        ]
+      },
+      {
+        "sensor_missing": "VIIRS",
+        "year": 2026,
+        "month": 3,
+        "gap_days": 2,
+        "dates": [
+          "2026-03-11",
+          "2026-03-12"
+        ]
+      },
+      {
+        "sensor_missing": "VIIRS",
+        "year": 2026,
+        "month": 4,
+        "gap_days": 3,
+        "dates": [
+          "2026-04-28",
+          "2026-04-29",
+          "2026-04-30"
+        ]
+      },
+      {
+        "sensor_missing": "VIIRS",
+        "year": 2026,
+        "month": 6,
+        "gap_days": 2,
+        "dates": [
+          "2026-06-01",
+          "2026-06-02"
+        ]
+      },
+      {
+        "sensor_missing": "VIIRS",
+        "year": 2026,
+        "month": 7,
+        "gap_days": 6,
+        "dates": [
+          "2026-07-11",
+          "2026-07-12",
+          "2026-07-13",
+          "2026-07-14",
+          "2026-07-15",
+          "2026-07-16"
+        ]
+      },
+      {
+        "sensor_missing": "VIIRS",
+        "year": 2026,
+        "month": 8,
+        "gap_days": 1,
+        "dates": [
+          "2026-08-03"
+        ]
+      }
+    ],
+    "gap_flagged_not_filled": [
+      "2026-07"
+    ],
+    "clip": {
+      "method": "point in Natural Earth 10m Argentina polygon (pipeline/ref/argentina_ne10m.geojson)",
+      "validation_2019_vs_country_archive": {
+        "MODIS_annual_celldays_pct": 0.0,
+        "VIIRS_annual_celldays_pct": -0.01,
+        "VIIRS_worst_month_pct": -0.12,
+        "unclipped_bbox_pct": {
+          "MODIS": 90.6,
+          "VIIRS": 99.4
+        }
+      }
+    },
+    "static_sources": {
+      "SP_rows": "FIRMS type field, type==0 kept (same as archive)",
+      "NRT_rows": "no type field; type=2 assigned when the detection falls on a grid cell where SP data recorded type 1/2/3 (archive + 2026 SP); grid 0.005 deg VIIRS, 0.01 deg MODIS",
+      "validation_residual_celldays_pct": {
+        "VIIRS": {
+          "2025": -0.14,
+          "2026_SP": 0.78
+        },
+        "MODIS": {
+          "2025": 0.59,
+          "2026_SP": 1.06
+        }
+      },
+      "no_filter_celldays_pct": {
+        "VIIRS": {
+          "2025": 1.65,
+          "2026_SP": 3.87
+        },
+        "MODIS": {
+          "2025": 2.83,
+          "2026_SP": 5.36
+        }
+      }
+    },
+    "not_in_scoring": "Live-year months are not part of the test set."
+  },
   "scores_test": {
     "raw_modis": {
       "monthly": {
@@ -216,6 +476,97 @@
         "MAPE_pct": 6.413619089968849,
         "R2": 0.9739801174080596,
         "bias_pct": 1.2597691380745923
+      }
+    }
+  },
+  "scores_by_period": {
+    "definition": "test months only (complete, not gap-flagged); no refit",
+    "model_a_ratio": 2.75362763915547,
+    "2020-2022": {
+      "note": "stable Aqua orbit",
+      "months_n": 33,
+      "years_n": 3,
+      "model_a": {
+        "monthly": {
+          "MAPE_pct": 14.93027311121075,
+          "R2": 0.9469743850777854,
+          "bias_pct": -0.21781628152325766
+        },
+        "annual": {
+          "MAPE_pct": 4.499355765270452,
+          "R2": 0.9805370122701708,
+          "bias_pct": -0.21781628152325766
+        }
+      },
+      "model_b": {
+        "monthly": {
+          "MAPE_pct": 10.157249583418656,
+          "R2": 0.9873280386206688,
+          "bias_pct": -3.409571135735952
+        },
+        "annual": {
+          "MAPE_pct": 3.9216083568179747,
+          "R2": 0.9886711488938045,
+          "bias_pct": -3.409571135735968
+        }
+      }
+    },
+    "2023-2025": {
+      "note": "Aqua overpass drift",
+      "months_n": 34,
+      "years_n": 3,
+      "model_a": {
+        "monthly": {
+          "MAPE_pct": 17.041858929837172,
+          "R2": 0.8081879063633427,
+          "bias_pct": 7.959936170814899
+        },
+        "annual": {
+          "MAPE_pct": 8.451882084163405,
+          "R2": -0.365294190945062,
+          "bias_pct": 7.959936170814887
+        }
+      },
+      "model_b": {
+        "monthly": {
+          "MAPE_pct": 14.555504772055523,
+          "R2": 0.8849266029537688,
+          "bias_pct": 8.925732145328162
+        },
+        "annual": {
+          "MAPE_pct": 8.905629823119725,
+          "R2": -0.3981509662195437,
+          "bias_pct": 8.925732145328162
+        }
+      }
+    },
+    "2020-2025": {
+      "note": "all test years",
+      "months_n": 67,
+      "years_n": 6,
+      "model_a": {
+        "monthly": {
+          "MAPE_pct": 16.001824123648035,
+          "R2": 0.9231812145305086,
+          "bias_pct": 2.8777467544965276
+        },
+        "annual": {
+          "MAPE_pct": 6.475618924716929,
+          "R2": 0.9695290835771972,
+          "bias_pct": 2.8777467544965276
+        }
+      },
+      "model_b": {
+        "monthly": {
+          "MAPE_pct": 12.38919997765229,
+          "R2": 0.9671750698742312,
+          "bias_pct": 1.2597691380745728
+        },
+        "annual": {
+          "MAPE_pct": 6.413619089968849,
+          "R2": 0.9739801174080596,
+          "bias_pct": 1.2597691380745923
+        }
       }
     }
   },
@@ -354,6 +705,15 @@
       "reference": "MODIS Aqua",
       "gap_days": 11,
       "month_str": "2024-07"
+    },
+    {
+      "year": 2026,
+      "month": 7,
+      "sensor_missing": "VIIRS",
+      "reference": "MODIS Aqua",
+      "gap_days": 6,
+      "live": true,
+      "month_str": "2026-07"
     }
   ],
   "gap_filled_months": [
@@ -389,7 +749,8 @@
   "notes": [
     "Scores exclude all gap-flagged months.",
     "Back-cast and gap-fill lo80/hi80 use the leave-one-year-out interval.",
-    "Training (2012-2019) and model b coefficients unchanged when 2025 was added; back-cast values identical."
+    "Training (2012-2019) and model b coefficients unchanged when 2025 was added; back-cast values identical.",
+    "Live year: harmonized = observed VIIRS, including gap-flagged months (not gap-filled)."
   ],
   "known_limitations": [
     {
@@ -404,8 +765,169 @@
       "action": "None taken."
     },
     {
+      "id": "backcast_overpass_assumption",
+      "finding": "Aqua's median daytime overpass in 2003-2011 ranges 13:50-13:56 local solar time vs 13:52-13:55 in the 2012-2019 training years (mean 13:54). Largest yearly difference 3 min, tolerance 5 min; for scale the 2025 drift is +69 min. Assumption CONFIRMED.",
+      "check": {
+        "training_2012_2019_mean": "13:54",
+        "training_year_range": [
+          "13:52",
+          "13:55"
+        ],
+        "backcast_2003_2011_range": [
+          "13:50",
+          "13:56"
+        ],
+        "backcast_minus_training_minutes_by_year": {
+          "2003": -3.2,
+          "2004": -2.1,
+          "2005": -3.1,
+          "2006": -0.8,
+          "2007": 0.4,
+          "2008": 1.5,
+          "2009": 2.0,
+          "2010": 0.9,
+          "2011": -0.3
+        },
+        "tolerance_minutes": 5.0,
+        "drift_2025_minus_training_minutes": 68.8,
+        "verdict": "confirmed"
+      }
+    },
+    {
+      "id": "gapfill_2024_07",
+      "finding": "Gap-filled month 2024-07 (harmonized 6,533 vs raw VIIRS 3,773 over an 11-day outage) is likely high, drift period: model b over-predicts the surrounding 2024 months (Jun +32%, Aug +23%, Sep +25%) while Aqua's overpass has drifted to ~14:31.",
+      "status": "likely high, drift period",
+      "action": "None taken (no refit)."
+    },
+    {
       "id": "diagnostic_table",
       "rows": [
+        {
+          "sensor": "MODIS Aqua",
+          "year": 2003,
+          "version": {
+            "6.2": 76480
+          },
+          "median_day_acq_time_utc": "17:57",
+          "median_day_local_solar_time": "13:50",
+          "median_day_local_solar_min": 830.8092,
+          "iqr_day_local_solar_time": [
+            "13:37",
+            "14:05"
+          ]
+        },
+        {
+          "sensor": "MODIS Aqua",
+          "year": 2004,
+          "version": {
+            "6.2": 63859
+          },
+          "median_day_acq_time_utc": "17:54",
+          "median_day_local_solar_time": "13:51",
+          "median_day_local_solar_min": 831.9318000000001,
+          "iqr_day_local_solar_time": [
+            "13:36",
+            "14:07"
+          ]
+        },
+        {
+          "sensor": "MODIS Aqua",
+          "year": 2005,
+          "version": {
+            "6.2": 44047
+          },
+          "median_day_acq_time_utc": "17:57",
+          "median_day_local_solar_time": "13:50",
+          "median_day_local_solar_min": 830.9362000000001,
+          "iqr_day_local_solar_time": [
+            "13:35",
+            "14:06"
+          ]
+        },
+        {
+          "sensor": "MODIS Aqua",
+          "year": 2006,
+          "version": {
+            "6.2": 53907
+          },
+          "median_day_acq_time_utc": "17:55",
+          "median_day_local_solar_time": "13:53",
+          "median_day_local_solar_min": 833.2516,
+          "iqr_day_local_solar_time": [
+            "13:39",
+            "14:08"
+          ]
+        },
+        {
+          "sensor": "MODIS Aqua",
+          "year": 2007,
+          "version": {
+            "6.2": 50537
+          },
+          "median_day_acq_time_utc": "18:00",
+          "median_day_local_solar_time": "13:54",
+          "median_day_local_solar_min": 834.4304,
+          "iqr_day_local_solar_time": [
+            "13:38",
+            "14:09"
+          ]
+        },
+        {
+          "sensor": "MODIS Aqua",
+          "year": 2008,
+          "version": {
+            "6.2": 67619
+          },
+          "median_day_acq_time_utc": "17:59",
+          "median_day_local_solar_time": "13:55",
+          "median_day_local_solar_min": 835.5728,
+          "iqr_day_local_solar_time": [
+            "13:40",
+            "14:11"
+          ]
+        },
+        {
+          "sensor": "MODIS Aqua",
+          "year": 2009,
+          "version": {
+            "6.2": 52137
+          },
+          "median_day_acq_time_utc": "17:59",
+          "median_day_local_solar_time": "13:56",
+          "median_day_local_solar_min": 836.0072,
+          "iqr_day_local_solar_time": [
+            "13:41",
+            "14:13"
+          ]
+        },
+        {
+          "sensor": "MODIS Aqua",
+          "year": 2010,
+          "version": {
+            "6.2": 38962
+          },
+          "median_day_acq_time_utc": "18:01",
+          "median_day_local_solar_time": "13:54",
+          "median_day_local_solar_min": 834.9388,
+          "iqr_day_local_solar_time": [
+            "13:40",
+            "14:09"
+          ]
+        },
+        {
+          "sensor": "MODIS Aqua",
+          "year": 2011,
+          "version": {
+            "6.2": 47489
+          },
+          "median_day_acq_time_utc": "18:00",
+          "median_day_local_solar_time": "13:53",
+          "median_day_local_solar_min": 833.7144000000001,
+          "iqr_day_local_solar_time": [
+            "13:38",
+            "14:10"
+          ]
+        },
         {
           "sensor": "MODIS Aqua",
           "year": 2012,
@@ -413,7 +935,12 @@
             "6.2": 39240
           },
           "median_day_acq_time_utc": "17:55",
-          "median_day_local_solar_time": "13:52"
+          "median_day_local_solar_time": "13:52",
+          "median_day_local_solar_min": 832.3249999999999,
+          "iqr_day_local_solar_time": [
+            "13:38",
+            "14:09"
+          ]
         },
         {
           "sensor": "MODIS Aqua",
@@ -422,7 +949,12 @@
             "6.2": 41626
           },
           "median_day_acq_time_utc": "18:01",
-          "median_day_local_solar_time": "13:54"
+          "median_day_local_solar_time": "13:54",
+          "median_day_local_solar_min": 834.1424,
+          "iqr_day_local_solar_time": [
+            "13:38",
+            "14:09"
+          ]
         },
         {
           "sensor": "MODIS Aqua",
@@ -431,7 +963,12 @@
             "6.2": 21963
           },
           "median_day_acq_time_utc": "17:56",
-          "median_day_local_solar_time": "13:52"
+          "median_day_local_solar_time": "13:52",
+          "median_day_local_solar_min": 832.932,
+          "iqr_day_local_solar_time": [
+            "13:37",
+            "14:08"
+          ]
         },
         {
           "sensor": "MODIS Aqua",
@@ -440,7 +977,12 @@
             "6.2": 28722
           },
           "median_day_acq_time_utc": "18:01",
-          "median_day_local_solar_time": "13:55"
+          "median_day_local_solar_time": "13:55",
+          "median_day_local_solar_min": 835.8342,
+          "iqr_day_local_solar_time": [
+            "13:42",
+            "14:10"
+          ]
         },
         {
           "sensor": "MODIS Aqua",
@@ -449,7 +991,12 @@
             "6.2": 35880
           },
           "median_day_acq_time_utc": "18:00",
-          "median_day_local_solar_time": "13:55"
+          "median_day_local_solar_time": "13:55",
+          "median_day_local_solar_min": 835.2218,
+          "iqr_day_local_solar_time": [
+            "13:38",
+            "14:11"
+          ]
         },
         {
           "sensor": "MODIS Aqua",
@@ -458,7 +1005,12 @@
             "6.2": 37416
           },
           "median_day_acq_time_utc": "18:01",
-          "median_day_local_solar_time": "13:54"
+          "median_day_local_solar_time": "13:54",
+          "median_day_local_solar_min": 834.8512000000001,
+          "iqr_day_local_solar_time": [
+            "13:38",
+            "14:09"
+          ]
         },
         {
           "sensor": "MODIS Aqua",
@@ -467,7 +1019,12 @@
             "6.03": 35099
           },
           "median_day_acq_time_utc": "17:56",
-          "median_day_local_solar_time": "13:52"
+          "median_day_local_solar_time": "13:52",
+          "median_day_local_solar_min": 832.6676,
+          "iqr_day_local_solar_time": [
+            "13:40",
+            "14:09"
+          ]
         },
         {
           "sensor": "MODIS Aqua",
@@ -476,7 +1033,12 @@
             "6.03": 32065
           },
           "median_day_acq_time_utc": "18:00",
-          "median_day_local_solar_time": "13:54"
+          "median_day_local_solar_time": "13:54",
+          "median_day_local_solar_min": 834.4256,
+          "iqr_day_local_solar_time": [
+            "13:38",
+            "14:09"
+          ]
         },
         {
           "sensor": "MODIS Aqua",
@@ -485,7 +1047,12 @@
             "6.03": 80826
           },
           "median_day_acq_time_utc": "17:55",
-          "median_day_local_solar_time": "13:53"
+          "median_day_local_solar_time": "13:53",
+          "median_day_local_solar_min": 833.5376,
+          "iqr_day_local_solar_time": [
+            "13:37",
+            "14:10"
+          ]
         },
         {
           "sensor": "MODIS Aqua",
@@ -494,7 +1061,12 @@
             "6.03": 36146
           },
           "median_day_acq_time_utc": "18:00",
-          "median_day_local_solar_time": "13:54"
+          "median_day_local_solar_time": "13:54",
+          "median_day_local_solar_min": 834.9721999999999,
+          "iqr_day_local_solar_time": [
+            "13:38",
+            "14:09"
+          ]
         },
         {
           "sensor": "MODIS Aqua",
@@ -503,7 +1075,12 @@
             "6.03": 49629
           },
           "median_day_acq_time_utc": "18:02",
-          "median_day_local_solar_time": "13:57"
+          "median_day_local_solar_time": "13:57",
+          "median_day_local_solar_min": 837.2748,
+          "iqr_day_local_solar_time": [
+            "13:41",
+            "14:13"
+          ]
         },
         {
           "sensor": "MODIS Aqua",
@@ -512,7 +1089,12 @@
             "61.03": 29465
           },
           "median_day_acq_time_utc": "18:12",
-          "median_day_local_solar_time": "14:09"
+          "median_day_local_solar_time": "14:09",
+          "median_day_local_solar_min": 849.97,
+          "iqr_day_local_solar_time": [
+            "13:53",
+            "14:25"
+          ]
         },
         {
           "sensor": "MODIS Aqua",
@@ -521,7 +1103,12 @@
             "61.03": 33576
           },
           "median_day_acq_time_utc": "18:33",
-          "median_day_local_solar_time": "14:31"
+          "median_day_local_solar_time": "14:31",
+          "median_day_local_solar_min": 871.7556,
+          "iqr_day_local_solar_time": [
+            "14:18",
+            "14:46"
+          ]
         },
         {
           "sensor": "MODIS Aqua",
@@ -530,7 +1117,102 @@
             "61.03": 33334
           },
           "median_day_acq_time_utc": "19:08",
-          "median_day_local_solar_time": "15:02"
+          "median_day_local_solar_time": "15:02",
+          "median_day_local_solar_min": 902.808,
+          "iqr_day_local_solar_time": [
+            "14:48",
+            "15:17"
+          ]
+        },
+        {
+          "sensor": "VIIRS S-NPP",
+          "year": 2003,
+          "version": null,
+          "median_day_acq_time_utc": null,
+          "median_day_local_solar_time": null,
+          "median_day_local_solar_min": null,
+          "iqr_day_local_solar_time": null,
+          "note": "no data: S-NPP launched Oct 2011; FIRMS record starts 2012-01-20"
+        },
+        {
+          "sensor": "VIIRS S-NPP",
+          "year": 2004,
+          "version": null,
+          "median_day_acq_time_utc": null,
+          "median_day_local_solar_time": null,
+          "median_day_local_solar_min": null,
+          "iqr_day_local_solar_time": null,
+          "note": "no data: S-NPP launched Oct 2011; FIRMS record starts 2012-01-20"
+        },
+        {
+          "sensor": "VIIRS S-NPP",
+          "year": 2005,
+          "version": null,
+          "median_day_acq_time_utc": null,
+          "median_day_local_solar_time": null,
+          "median_day_local_solar_min": null,
+          "iqr_day_local_solar_time": null,
+          "note": "no data: S-NPP launched Oct 2011; FIRMS record starts 2012-01-20"
+        },
+        {
+          "sensor": "VIIRS S-NPP",
+          "year": 2006,
+          "version": null,
+          "median_day_acq_time_utc": null,
+          "median_day_local_solar_time": null,
+          "median_day_local_solar_min": null,
+          "iqr_day_local_solar_time": null,
+          "note": "no data: S-NPP launched Oct 2011; FIRMS record starts 2012-01-20"
+        },
+        {
+          "sensor": "VIIRS S-NPP",
+          "year": 2007,
+          "version": null,
+          "median_day_acq_time_utc": null,
+          "median_day_local_solar_time": null,
+          "median_day_local_solar_min": null,
+          "iqr_day_local_solar_time": null,
+          "note": "no data: S-NPP launched Oct 2011; FIRMS record starts 2012-01-20"
+        },
+        {
+          "sensor": "VIIRS S-NPP",
+          "year": 2008,
+          "version": null,
+          "median_day_acq_time_utc": null,
+          "median_day_local_solar_time": null,
+          "median_day_local_solar_min": null,
+          "iqr_day_local_solar_time": null,
+          "note": "no data: S-NPP launched Oct 2011; FIRMS record starts 2012-01-20"
+        },
+        {
+          "sensor": "VIIRS S-NPP",
+          "year": 2009,
+          "version": null,
+          "median_day_acq_time_utc": null,
+          "median_day_local_solar_time": null,
+          "median_day_local_solar_min": null,
+          "iqr_day_local_solar_time": null,
+          "note": "no data: S-NPP launched Oct 2011; FIRMS record starts 2012-01-20"
+        },
+        {
+          "sensor": "VIIRS S-NPP",
+          "year": 2010,
+          "version": null,
+          "median_day_acq_time_utc": null,
+          "median_day_local_solar_time": null,
+          "median_day_local_solar_min": null,
+          "iqr_day_local_solar_time": null,
+          "note": "no data: S-NPP launched Oct 2011; FIRMS record starts 2012-01-20"
+        },
+        {
+          "sensor": "VIIRS S-NPP",
+          "year": 2011,
+          "version": null,
+          "median_day_acq_time_utc": null,
+          "median_day_local_solar_time": null,
+          "median_day_local_solar_min": null,
+          "iqr_day_local_solar_time": null,
+          "note": "no data: S-NPP launched Oct 2011; FIRMS record starts 2012-01-20"
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -539,7 +1221,12 @@
             "2": 189787
           },
           "median_day_acq_time_utc": "17:48",
-          "median_day_local_solar_time": "13:46"
+          "median_day_local_solar_time": "13:46",
+          "median_day_local_solar_min": 826.27674,
+          "iqr_day_local_solar_time": [
+            "13:23",
+            "14:10"
+          ]
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -548,7 +1235,12 @@
             "2": 237553
           },
           "median_day_acq_time_utc": "18:00",
-          "median_day_local_solar_time": "13:52"
+          "median_day_local_solar_time": "13:52",
+          "median_day_local_solar_min": 832.43542,
+          "iqr_day_local_solar_time": [
+            "13:25",
+            "14:16"
+          ]
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -557,7 +1249,12 @@
             "2": 126346
           },
           "median_day_acq_time_utc": "18:00",
-          "median_day_local_solar_time": "13:54"
+          "median_day_local_solar_time": "13:54",
+          "median_day_local_solar_min": 834.30888,
+          "iqr_day_local_solar_time": [
+            "13:27",
+            "14:19"
+          ]
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -566,7 +1263,12 @@
             "2": 151071
           },
           "median_day_acq_time_utc": "17:58",
-          "median_day_local_solar_time": "13:53"
+          "median_day_local_solar_time": "13:53",
+          "median_day_local_solar_min": 833.51992,
+          "iqr_day_local_solar_time": [
+            "13:26",
+            "14:18"
+          ]
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -575,7 +1277,12 @@
             "2": 181421
           },
           "median_day_acq_time_utc": "17:53",
-          "median_day_local_solar_time": "13:46"
+          "median_day_local_solar_time": "13:46",
+          "median_day_local_solar_min": 826.79744,
+          "iqr_day_local_solar_time": [
+            "13:19",
+            "14:17"
+          ]
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -584,7 +1291,12 @@
             "2": 201664
           },
           "median_day_acq_time_utc": "17:54",
-          "median_day_local_solar_time": "13:47"
+          "median_day_local_solar_time": "13:47",
+          "median_day_local_solar_min": 827.2071599999999,
+          "iqr_day_local_solar_time": [
+            "13:18",
+            "14:17"
+          ]
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -593,7 +1305,12 @@
             "2": 184924
           },
           "median_day_acq_time_utc": "17:54",
-          "median_day_local_solar_time": "13:48"
+          "median_day_local_solar_time": "13:48",
+          "median_day_local_solar_min": 828.4109599999999,
+          "iqr_day_local_solar_time": [
+            "13:19",
+            "14:17"
+          ]
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -602,7 +1319,12 @@
             "2": 161688
           },
           "median_day_acq_time_utc": "17:50",
-          "median_day_local_solar_time": "13:47"
+          "median_day_local_solar_time": "13:47",
+          "median_day_local_solar_min": 827.5301999999999,
+          "iqr_day_local_solar_time": [
+            "13:23",
+            "14:13"
+          ]
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -611,7 +1333,12 @@
             "2": 448313
           },
           "median_day_acq_time_utc": "17:49",
-          "median_day_local_solar_time": "13:48"
+          "median_day_local_solar_time": "13:48",
+          "median_day_local_solar_min": 828.5904800000001,
+          "iqr_day_local_solar_time": [
+            "13:24",
+            "14:11"
+          ]
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -620,7 +1347,12 @@
             "2": 198060
           },
           "median_day_acq_time_utc": "17:49",
-          "median_day_local_solar_time": "13:47"
+          "median_day_local_solar_time": "13:47",
+          "median_day_local_solar_min": 827.20536,
+          "iqr_day_local_solar_time": [
+            "13:22",
+            "14:13"
+          ]
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -629,7 +1361,12 @@
             "2": 312925
           },
           "median_day_acq_time_utc": "17:50",
-          "median_day_local_solar_time": "13:47"
+          "median_day_local_solar_time": "13:47",
+          "median_day_local_solar_min": 827.49858,
+          "iqr_day_local_solar_time": [
+            "13:18",
+            "14:15"
+          ]
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -638,7 +1375,12 @@
             "2": 171695
           },
           "median_day_acq_time_utc": "17:55",
-          "median_day_local_solar_time": "13:51"
+          "median_day_local_solar_time": "13:51",
+          "median_day_local_solar_min": 831.5801799999999,
+          "iqr_day_local_solar_time": [
+            "13:22",
+            "14:16"
+          ]
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -647,7 +1389,12 @@
             "2": 152971
           },
           "median_day_acq_time_utc": "17:54",
-          "median_day_local_solar_time": "13:49"
+          "median_day_local_solar_time": "13:49",
+          "median_day_local_solar_min": 829.72036,
+          "iqr_day_local_solar_time": [
+            "13:22",
+            "14:15"
+          ]
         },
         {
           "sensor": "VIIRS S-NPP",
@@ -656,7 +1403,12 @@
             "2": 170674
           },
           "median_day_acq_time_utc": "17:57",
-          "median_day_local_solar_time": "13:53"
+          "median_day_local_solar_time": "13:53",
+          "median_day_local_solar_min": 833.4241199999999,
+          "iqr_day_local_solar_time": [
+            "13:24",
+            "14:18"
+          ]
         }
       ]
     }

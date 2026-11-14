@@ -1,10 +1,12 @@
-"""Tasks 3-4: back-cast 2003-2011 and gap-fill VIIRS gaps with model b; write outputs.
+"""Back-cast 2003-2011, gap-fill VIIRS gaps with model b, append the live year; write outputs.
 
 Model b (approved): log1p(VIIRS) = a + b*log1p(MODIS), national monthly daytime
 active 0.1-degree cell-days, fitted 2012-2019 excluding gap-flagged months.
 Refitted here from the same inputs and checked against Task 2's parameters.
 
-harmonized (day):  2003-2011 back-cast; VIIRS-gap months gap-filled; else raw_viirs.
+harmonized (day):  2003-2011 back-cast; VIIRS-gap months gap-filled (archive years only);
+else raw_viirs. Live year (2026, FIRMS area API, see live.py): complete months only,
+harmonized = observed VIIRS, `nrt` marks months containing NRT data.
 Model months are distributed to cells pro rata to MODIS cell-days.
 80% interval: leave-one-year-out residuals on 2012-2019.
 
@@ -27,29 +29,32 @@ import pyarrow.parquet as pq
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from calibration import (BASE, GAP_DAYS_MAX, GRID, INK, INK2, MODIS_C, MUTED, PI, SURFACE,  # noqa: E402
                          VIIRS_C, cell, complete_months, load_year, score, style)
+import live  # noqa: E402
+from live import ARCHIVE_END, LIVE_YEAR  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "out"
 T2 = OUT / "task2"
-MODIS_YEARS = range(2003, 2026)
-VIIRS_YEARS = range(2012, 2026)
+MODIS_YEARS = range(2003, LIVE_YEAR + 1)
+VIIRS_YEARS = range(2012, LIVE_YEAR + 1)
 BACKCAST_END, TRAIN = 2011, (2012, 2019)
 TEST = (2020, 2025)
 TASK2_PARAMS = (1.662, 0.9141)
 CALIBRATION = "model_b_v1"
-CONTRACT = "harmonized_schema v0.3"
+CONTRACT = "harmonized_schema v0.4"
 
 SCHEMA = pa.schema([("lat", pa.float64(), False), ("lon", pa.float64(), False),
                     ("year", pa.int16(), False), ("month", pa.int8(), False),
                     ("daynight", pa.string(), False), ("raw_modis", pa.float64()),
                     ("raw_viirs", pa.float64()), ("harmonized", pa.float64()),
-                    ("source", pa.string(), False), ("gap_flag", pa.bool_(), False)])
+                    ("source", pa.string(), False), ("gap_flag", pa.bool_(), False),
+                    ("nrt", pa.bool_(), False)])
 
 
 def cell_days(sensor, years, spans):
     parts = []
     for y in years:
-        df = load_year(sensor, y)
+        df = live.load_live(sensor) if y == LIVE_YEAR else load_year(sensor, y)
         if df is None:
             raise FileNotFoundError(f"{sensor} {y} not on disk")
         spans[(sensor, y)] = (df.date.min(), df.date.max())
@@ -78,11 +83,22 @@ def early_aqua_gaps():
     return g, pm
 
 
+def hhmm(minutes):
+    return f"{int(minutes) // 60:02d}:{int(minutes) % 60:02d}"
+
+
 def sensor_diagnostics():
-    """Version field by year (both sensors) and daytime overpass time by year, 2012+. Diagnostic only."""
+    """Version field and daytime overpass time by year, 2003+ (S-NPP from 2012). Diagnostic only."""
     rows = []
     for sensor, sat in [("MODIS", "Aqua"), ("VIIRS", "N")]:
-        for y in VIIRS_YEARS:
+        name = f"{sensor} {'Aqua' if sensor == 'MODIS' else 'S-NPP'}"
+        for y in range(MODIS_YEARS[0], ARCHIVE_END + 1):
+            if sensor == "VIIRS" and y < VIIRS_YEARS[0]:
+                rows.append({"sensor": name, "year": y, "version": None, "median_day_acq_time_utc": None,
+                             "median_day_local_solar_time": None, "median_day_local_solar_min": None,
+                             "iqr_day_local_solar_time": None,
+                             "note": "no data: S-NPP launched Oct 2011; FIRMS record starts 2012-01-20"})
+                continue
             p = (ROOT / f"modis/{y}/modis_{y}_Argentina.csv" if sensor == "MODIS"
                  else ROOT / f"viirs-snpp/{y}/viirs-snpp_{y}_Argentina.csv")
             d = pd.read_csv(p, usecols=["longitude", "acq_time", "satellite", "version", "daynight"],
@@ -91,16 +107,36 @@ def sensor_diagnostics():
             dd = d[d.daynight == "D"]
             utc = dd.acq_time.str[:2].astype(int) * 60 + dd.acq_time.str[2:].astype(int)
             lst = (utc + dd.longitude * 4) % 1440          # local solar time removes fire-location shifts
-            rows.append({"sensor": f"{sensor} {'Aqua' if sensor == 'MODIS' else 'S-NPP'}", "year": y,
+            rows.append({"sensor": name, "year": y,
                          "version": {k: int(v) for k, v in d.version.value_counts().items()},
-                         "median_day_acq_time_utc": f"{int(utc.median()) // 60:02d}:{int(utc.median()) % 60:02d}",
-                         "median_day_local_solar_time": f"{int(lst.median()) // 60:02d}:{int(lst.median()) % 60:02d}"})
+                         "median_day_acq_time_utc": hhmm(utc.median()),
+                         "median_day_local_solar_time": hhmm(lst.median()),
+                         "median_day_local_solar_min": float(lst.median()),
+                         "iqr_day_local_solar_time": [hhmm(lst.quantile(0.25)), hhmm(lst.quantile(0.75))]})
     return rows
+
+
+def backcast_overpass_check(diag):
+    """Does Aqua's 2003-2011 overpass time match the 2012-2019 training years?"""
+    aq = {r["year"]: r["median_day_local_solar_min"] for r in diag if r["sensor"] == "MODIS Aqua"}
+    tr = [aq[y] for y in range(TRAIN[0], TRAIN[1] + 1)]
+    bc = [aq[y] for y in range(MODIS_YEARS[0], BACKCAST_END + 1)]
+    ref = float(np.mean(tr))
+    tr_dev = max(abs(v - ref) for v in tr)
+    bc_dev = {y: round(aq[y] - ref, 1) for y in range(MODIS_YEARS[0], BACKCAST_END + 1)}
+    tol = max(5.0, tr_dev)                              # minutes
+    ok = max(abs(v) for v in bc_dev.values()) <= tol
+    return {"training_2012_2019_mean": hhmm(ref), "training_year_range": [hhmm(min(tr)), hhmm(max(tr))],
+            "backcast_2003_2011_range": [hhmm(min(bc)), hhmm(max(bc))],
+            "backcast_minus_training_minutes_by_year": bc_dev,
+            "tolerance_minutes": tol, "drift_2025_minus_training_minutes": round(aq[2025] - ref, 1),
+            "verdict": "confirmed" if ok else "refuted"}
 
 
 def known_limitations(nat):
     diag = sensor_diagnostics()
-    ann = nat[nat.year >= TEST[0]].groupby("year")[["VIIRS", "pred"]].sum()
+    bchk = backcast_overpass_check(diag)
+    ann = nat[nat.year.between(*TEST)].groupby("year")[["VIIRS", "pred"]].sum()
     err = {int(y): round(float((r.pred - r.VIIRS) / r.VIIRS * 100), 1) for y, r in ann.iterrows()}
     return [
         {"id": "aqua_overpass_drift",
@@ -120,6 +156,21 @@ def known_limitations(nat):
                     "change in 2023 coincides with the start of the overpass drift, so the two cannot be "
                     "separated with this data.",
          "action": "None taken."},
+        {"id": "backcast_overpass_assumption",
+         "finding": (f"Aqua's median daytime overpass in 2003-2011 ranges {bchk['backcast_2003_2011_range'][0]}-"
+                     f"{bchk['backcast_2003_2011_range'][1]} local solar time vs "
+                     f"{bchk['training_year_range'][0]}-{bchk['training_year_range'][1]} in the 2012-2019 "
+                     f"training years (mean {bchk['training_2012_2019_mean']}). Largest yearly difference "
+                     f"{max(abs(v) for v in bchk['backcast_minus_training_minutes_by_year'].values()):.0f} min, "
+                     f"tolerance {bchk['tolerance_minutes']:.0f} min; for scale the 2025 drift is "
+                     f"{bchk['drift_2025_minus_training_minutes']:+.0f} min. Assumption "
+                     f"{bchk['verdict'].upper()}."),
+         "check": bchk},
+        {"id": "gapfill_2024_07",
+         "finding": "Gap-filled month 2024-07 (harmonized 6,533 vs raw VIIRS 3,773 over an 11-day outage) "
+                    "is likely high, drift period: model b over-predicts the surrounding 2024 months "
+                    "(Jun +32%, Aug +23%, Sep +25%) while Aqua's overpass has drifted to ~14:31.",
+         "status": "likely high, drift period", "action": "None taken (no refit)."},
         {"id": "diagnostic_table", "rows": diag},
     ]
 
@@ -154,15 +205,29 @@ def main():
     comp = complete_months(spans, VIIRS_YEARS)
     c = pd.concat([m, v], axis=1).reset_index()
 
+    # live year: keep complete months only; Task 2 gap rule; no gap-fill (harmonized = observed VIIRS)
+    live_comp = {k for k in comp if k[0] == LIVE_YEAR}
+    held_back = sorted({(y, mo) for y, mo in zip(c.year, c.month) if y == LIVE_YEAR} - live_comp)
+    c = c[(c.year != LIVE_YEAR) | pd.Series([k in live_comp for k in zip(c.year, c.month)], index=c.index)]
+    lg = live.live_gaps(live_comp)
+    lg_fl = lg[lg.gap_days > GAP_DAYS_MAX]
+    flag_list += [{"year": int(r.year), "month": int(r.month), "sensor_missing": r.sensor_missing,
+                   "reference": "VIIRS" if r.sensor_missing == "MODIS" else "MODIS Aqua",
+                   "gap_days": int(r.gap_days), "live": True} for r in lg_fl.itertuples()]
+    flagged = {(f["year"], f["month"]) for f in flag_list}
+    nrt_set = (live.nrt_months("MODIS") | live.nrt_months("VIIRS")) & live_comp
+
     # ---------------- national daytime monthly ---------------------------
     nat = c[c.daynight == "D"].groupby(["year", "month"])[["MODIS", "VIIRS"]].sum(min_count=1)
-    nat = nat.reindex(pd.MultiIndex.from_product([MODIS_YEARS, range(1, 13)], names=["year", "month"])).reset_index()
+    idx = [(y, mo) for y in MODIS_YEARS for mo in range(1, 13) if y != LIVE_YEAR or (y, mo) in live_comp]
+    nat = nat.reindex(pd.MultiIndex.from_tuples(idx, names=["year", "month"])).reset_index()
     nat["MODIS"] = nat.MODIS.fillna(0)
     nat.loc[nat.year >= VIIRS_YEARS[0], "VIIRS"] = nat.VIIRS[nat.year >= VIIRS_YEARS[0]].fillna(0)
     ym = list(zip(nat.year, nat.month))
     nat["gap_flag"] = [k in flagged for k in ym]
     nat["excluded"] = [k in train_excl for k in ym]
     nat["complete"] = [k in comp or y <= BACKCAST_END for k, y in zip(ym, nat.year)]
+    nat["nrt"] = [k in nrt_set for k in ym]
 
     t2 = pd.read_csv(T2 / "monthly_celldays_day.csv")
     chk = nat.merge(t2, on=["year", "month"])
@@ -209,7 +274,7 @@ def main():
 
     # ---------------- harmonized national --------------------------------
     back = nat.year <= BACKCAST_END
-    fill = pd.Series([k in viirs_gap for k in ym])
+    fill = pd.Series([k in viirs_gap and k[0] != LIVE_YEAR for k in ym])
     model = back | fill
     nat["source"] = np.select([back, fill], ["backcast", "gapfill"], "observed")
     nat["harmonized"] = np.where(model, nat.pred, nat.VIIRS)
@@ -229,6 +294,7 @@ def main():
     c["harmonized"] = np.where(modelled, c.raw_modis * c.factor, np.where(pre, np.nan, c.raw_viirs))
     c["source"] = np.where(modelled, c.msrc, "observed")
     c["gap_flag"] = [k in flagged for k in zip(c.year, c.month)]
+    c["nrt"] = [k in nrt_set for k in zip(c.year, c.month)]
     c = c[(c.raw_modis > 0) | (c.raw_viirs.fillna(0) > 0)]
     c = c.astype({"year": "int16", "month": "int8"}).sort_values(["year", "month", "daynight", "lat", "lon"])
     assert not c.duplicated(["lat", "lon", "year", "month", "daynight"]).any()
@@ -241,17 +307,20 @@ def main():
                 "pi80": "leave-one-year-out residuals 2012-2019",
                 "pi80_log_residual_q10_q90": [round(q_lo[0], 6), round(q_lo[1], 6)],
                 "validation": "out/validation.json"}),
-            "filters": "MODIS Aqua conf>=30; VIIRS S-NPP conf!=l; type==0", "country": "Argentina",
+            "filters": "MODIS Aqua conf>=30; VIIRS S-NPP conf!=l; type==0 (NRT: type inferred from SP "
+                       "static-source locations)", "country": "Argentina",
+            "coverage": f"2003-01..{LIVE_YEAR}-{max(live_comp)[1]:02d}" if live_comp else f"2003-01..{ARCHIVE_END}-12",
             "contract": CONTRACT}
     tbl = pa.Table.from_pandas(c[SCHEMA.names], schema=SCHEMA, preserve_index=False)
     tbl = tbl.replace_schema_metadata({k.encode(): v.encode() for k, v in meta.items()})
     pq.write_table(tbl, OUT / "harmonized.parquet", compression="snappy")
 
     nm = nat.rename(columns={"MODIS": "raw_modis", "VIIRS": "raw_viirs"})[
-        ["year", "month", "raw_modis", "raw_viirs", "harmonized", "lo80", "hi80", "source", "gap_flag"]]
+        ["year", "month", "raw_modis", "raw_viirs", "harmonized", "lo80", "hi80", "source", "gap_flag", "nrt"]]
     nschema = pa.schema([("year", pa.int16(), False), ("month", pa.int8(), False), ("raw_modis", pa.float64()),
                          ("raw_viirs", pa.float64()), ("harmonized", pa.float64()), ("lo80", pa.float64()),
-                         ("hi80", pa.float64()), ("source", pa.string(), False), ("gap_flag", pa.bool_(), False)])
+                         ("hi80", pa.float64()), ("source", pa.string(), False), ("gap_flag", pa.bool_(), False),
+                         ("nrt", pa.bool_(), False)])
     nt = pa.Table.from_pandas(nm.astype({"year": "int16", "month": "int8"}), schema=nschema, preserve_index=False)
     nt = nt.replace_schema_metadata({**{k.encode(): v.encode() for k, v in meta.items()}, b"daynight": b"D"})
     pq.write_table(nt, OUT / "national_monthly.parquet", compression="snappy")
@@ -284,6 +353,29 @@ def main():
         ref = t2s.loc["raw_modis" if name == "raw_modis" else "b_power"]
         assert abs(ref["monthly_MAPE_%"] - mo["MAPE_%"]) < 1e-2 and abs(ref["annual_MAPE_%"] - an["MAPE_%"]) < 1e-2
 
+    # model a (constant ratio, Task 2 definition) and model b, by orbit period; no refit
+    r_a = float(nat.VIIRS[trm].sum() / nat.MODIS[trm].sum())
+    assert abs(r_a - 2.754) < 1e-3, r_a
+    nat["pred_a"] = r_a * nat.MODIS
+    scores_by_period = {"definition": "test months only (complete, not gap-flagged); no refit",
+                        "model_a_ratio": r_a}
+    for label, (y0, y1), note in [("2020-2022", (2020, 2022), "stable Aqua orbit"),
+                                  ("2023-2025", (2023, 2025), "Aqua overpass drift"),
+                                  ("2020-2025", TEST, "all test years")]:
+        pm = tem & nat.year.between(y0, y1)
+        sub = nat[pm]
+        an_ = sub.groupby("year")[["VIIRS", "pred_a", "pred"]].sum()
+        block = {"note": note, "months_n": int(pm.sum()), "years_n": len(an_)}
+        for mname, col in [("model_a", "pred_a"), ("model_b", "pred")]:
+            mo, an = score(sub.VIIRS, sub[col]), score(an_.VIIRS, an_[col])
+            block[mname] = {"monthly": {"MAPE_pct": mo["MAPE_%"], "R2": mo["R2"], "bias_pct": mo["bias_%"]},
+                            "annual": {"MAPE_pct": an["MAPE_%"], "R2": an["R2"], "bias_pct": an["bias_%"]}}
+        scores_by_period[label] = block
+    allp = scores_by_period["2020-2025"]
+    ra = t2s.loc["a_ratio"]
+    assert abs(ra["monthly_MAPE_%"] - allp["model_a"]["monthly"]["MAPE_pct"]) < 1e-2
+    assert abs(allp["model_b"]["monthly"]["MAPE_pct"] - scores["model_b"]["monthly"]["MAPE_pct"]) < 1e-9
+
     # join check 2012: observed (non-gap months) vs model b; annual LOYO band
     y12 = nat[(nat.year == 2012) & ~nat.gap_flag]
     step = float(np.log(y12.VIIRS.sum() / y12.pred.sum()))
@@ -308,7 +400,37 @@ def main():
         "test_complete_month_rule": "month lies within both sensors' first..last acq_date for the year",
         "acq_date_spans": {f"{s} {y}": [str(a.date()), str(b.date())] for (s, y), (a, b) in sorted(spans.items())},
         "incomplete_months": [f"{y}-{mo:02d}" for (y, mo) in sorted(set(ym) - comp) if y >= VIIRS_YEARS[0]],
+        "live_year": {
+            "year": LIVE_YEAR, "api": "FIRMS area API, bbox -74,-56,-53,-21, 5-day chunks; source per sensor "
+                                      "from /api/data_availability (SP to its max_date, NRT after)",
+            "fetch": live.fetch_summary(),
+            "months_appended": [f"{y}-{mo:02d}" for y, mo in sorted(live_comp)],
+            "months_held_back_incomplete": [f"{y}-{mo:02d}" for y, mo in held_back],
+            "last_date_covered": f"{LIVE_YEAR}-{max(live_comp)[1]:02d}-"
+                                 f"{pd.Period(f'{LIVE_YEAR}-{max(live_comp)[1]:02d}').days_in_month:02d}",
+            "nrt_months": [f"{y}-{mo:02d}" for y, mo in sorted(nrt_set)],
+            "nrt_months_by_sensor": {s: [f"{y}-{mo:02d}" for y, mo in sorted(live.nrt_months(s) & live_comp)]
+                                     for s in ("MODIS", "VIIRS")},
+            "gap_days_by_month": [{**{k: (int(v) if k != "dates" and k != "sensor_missing" else v)
+                                      for k, v in r.items()}} for r in lg.to_dict("records")],
+            "gap_flagged_not_filled": [f"{f['year']}-{f['month']:02d}" for f in flag_list if f.get("live")
+                                       and f["sensor_missing"] == "VIIRS"],
+            "clip": {"method": "point in Natural Earth 10m Argentina polygon (pipeline/ref/argentina_ne10m.geojson)",
+                     "validation_2019_vs_country_archive": {"MODIS_annual_celldays_pct": 0.0,
+                                                            "VIIRS_annual_celldays_pct": -0.01,
+                                                            "VIIRS_worst_month_pct": -0.12,
+                                                            "unclipped_bbox_pct": {"MODIS": 90.6, "VIIRS": 99.4}}},
+            "static_sources": {
+                "SP_rows": "FIRMS type field, type==0 kept (same as archive)",
+                "NRT_rows": "no type field; type=2 assigned when the detection falls on a grid cell where SP data "
+                            "recorded type 1/2/3 (archive + 2026 SP); grid 0.005 deg VIIRS, 0.01 deg MODIS",
+                "validation_residual_celldays_pct": {"VIIRS": {"2025": -0.14, "2026_SP": 0.78},
+                                                     "MODIS": {"2025": 0.59, "2026_SP": 1.06}},
+                "no_filter_celldays_pct": {"VIIRS": {"2025": 1.65, "2026_SP": 3.87},
+                                           "MODIS": {"2025": 2.83, "2026_SP": 5.36}}},
+            "not_in_scoring": "Live-year months are not part of the test set."},
         "scores_test": scores,
+        "scores_by_period": scores_by_period,
         "interval_80": intervals,
         "join_check_2012": join,
         "gap_flagged_months": sorted(({**f, "month_str": f"{f['year']}-{f['month']:02d}"} for f in flag_list),
@@ -318,7 +440,8 @@ def main():
                               for r in filled.itertuples()],
         "notes": ["Scores exclude all gap-flagged months.",
                   "Back-cast and gap-fill lo80/hi80 use the leave-one-year-out interval.",
-                  "Training (2012-2019) and model b coefficients unchanged when 2025 was added; back-cast values identical."],
+                  "Training (2012-2019) and model b coefficients unchanged when 2025 was added; back-cast values identical.",
+                  "Live year: harmonized = observed VIIRS, including gap-flagged months (not gap-filled)."],
         "known_limitations": known_limitations(nat)}
     (OUT / "validation.json").write_text(json.dumps(validation, indent=2))
 
@@ -330,6 +453,7 @@ def main():
     print("\nJOIN CHECK\n" + json.dumps(join, indent=1))
     print("\nGAP-FILLED\n" + json.dumps(validation["gap_filled_months"], indent=1))
     print("\nSCORES\n" + json.dumps(scores, indent=1))
+    print("\nSCORES BY PERIOD\n" + json.dumps(scores_by_period, indent=1))
 
     chart(nat)
 
@@ -348,6 +472,10 @@ def chart(nat):
     ax.plot(x, nat.harmonized, color=VIIRS_C, lw=2, label="Harmonized (VIIRS-equivalent)")
     ax.plot(x, nat.VIIRS, color=INK, lw=0, marker="o", ms=3, label="Raw VIIRS S-NPP")
     ax.plot(x, nat.MODIS, color=MODIS_C, lw=1.5, label="Raw MODIS Aqua")
+    nr = nat.nrt
+    if nr.any():
+        ax.axvspan(x[nr].min() - pd.Timedelta(days=15), x[nr].max() + pd.Timedelta(days=16),
+                   color=MODIS_C, alpha=0.10, lw=0, label="NRT (provisional) months")
     g = nat.gap_flag
     ax.plot(x[g], nat.harmonized[g], "o", mfc="none", mec=MUTED, ms=9, mew=1.5, label="Gap-flagged month")
     ax.plot(x[fill], nat.harmonized[fill], "D", color=VIIRS_C, mec=SURFACE, mew=1.5, ms=7,
@@ -357,8 +485,8 @@ def chart(nat):
     ax.axvline(pd.Timestamp("2012-01-01"), color=BASE, lw=1)
     ax.set_ylabel("daytime active 0.1° cell-days per month", color=INK2)
     ax.set_xlim(x.min() - pd.Timedelta(days=60), x.max() + pd.Timedelta(days=60))
-    ax.legend(frameon=False, fontsize=9, loc="upper center", labelcolor=INK, bbox_to_anchor=(0.5, -0.07), ncol=6)
-    ax.set_title("Argentina national daytime fire activity, 2003–2025 (model b, calibration model_b_v1)",
+    ax.legend(frameon=False, fontsize=9, loc="upper center", labelcolor=INK, bbox_to_anchor=(0.5, -0.07), ncol=4)
+    ax.set_title(f"Argentina national daytime fire activity, 2003–{nat.year.max()}-{nat.month[nat.year == nat.year.max()].max():02d} (model b, calibration model_b_v1)",
                  loc="left", fontsize=12, color=INK)
     fig.tight_layout()
     fig.savefig(OUT / "chart_national_series.png", dpi=150, facecolor=SURFACE)
