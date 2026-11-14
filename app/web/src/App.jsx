@@ -12,6 +12,8 @@ const API = import.meta.env.VITE_API_BASE || '/api';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const LABELS = { raw_modis: 'MODIS Aqua', raw_viirs: 'VIIRS Suomi-NPP', harmonized: 'Harmonized' };
 const format = value => value == null ? '—' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(value);
+const monthLabel = value => value ? new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}-01T00:00:00Z`)) : 'Loading…';
+const PRESETS = [['All Argentina', [-74,-56,-53,-21]], ['Gran Chaco', [-64,-28,-59,-24]], ['Pampas', [-64,-38,-59,-33]], ['Patagonia', [-71,-50,-67,-40]]];
 const monthKey = row => `${row.year}-${String(row.month).padStart(2, '0')}`;
 function validateBounds(values) {
   if (values.some(v => String(v).trim() === '' || !Number.isFinite(Number(v)))) return 'Enter all four coordinates.';
@@ -130,33 +132,36 @@ export default function App() {
     finally { setDownloading(false); }
   }
 
-  const regionName = [
-    ['All Argentina', [-74,-56,-53,-21]], ['Gran Chaco', [-64,-28,-59,-24]],
-    ['Pampas', [-64,-38,-59,-33]], ['Patagonia', [-71,-50,-67,-40]],
-  ].find(([,values]) => values.join(',') === bounds.join(','))?.[0] || 'Custom area';
+  const regionName = PRESETS.find(([,values]) => values.join(',') === bounds.join(','))?.[0] || 'Custom area';
+  const latestMonth = meta?.latest_complete_month && meta.latest_complete_month < meta.end ? meta.latest_complete_month : meta?.end;
   const rawRows = daytime?.data || [];
   const rawMaximum = Math.max(1, ...rawRows.flatMap(row => [row.raw_modis || 0, row.raw_viirs || 0]));
   const rawIndex = Math.max(0, rawRows.findIndex(row => monthKey(row) === hoveredMonth));
 
   return <div className="app-shell">
-    <header className="topbar"><div className="brand"><span className="brand-icon" aria-hidden="true">◉</span><div>HOTSPOT <strong>OBSERVATORY</strong><small>ARGENTINA · SPACE & TIME</small></div></div><span className="shared-region">Selected area: <strong>{regionName}</strong></span></header>
+    <header className="topbar"><div className="brand"><span className="brand-icon" aria-hidden="true">◉</span><div>HOTSPOT <strong>OBSERVATORY</strong><small>Harmonized satellite fire history</small></div></div></header>
     {synthetic && <div className="synthetic-banner" role="status"><strong>◈ SYNTHETIC DATA</strong><span>Invented demonstration values. Not NASA observations. Not for scientific use.</span></div>}
     <main className="four-section-page">
-      <div className="page-heading"><div><h1>A clearer view of hotspot activity.</h1><p>Active cell-days measure satellite-detected hotspot activity, not unique fire counts or burned area.</p></div><a className="jump-explore" href="#explore">Explore the history ↓</a></div>
-      <nav className="section-nav" aria-label="On this page"><a href="#where">01 Select a region</a><a href="#satellites">02 Compare satellites</a><a href="#history">03 Understand harmonization</a><a href="#explore">04 Explore fire history</a></nav>
+      <div className="page-heading"><div><h1>Two satellites. One clearer fire history.</h1><p className="hero-subhead">MODIS and VIIRS have observed Earth's fires for decades, but their measurements aren't directly comparable. Hotspot Observatory bridges those differences to reveal historical burning patterns across Argentina from 2003 to 2026.</p><p className="hero-note">Activity is measured in active cell-days, not individual fires or burned area.</p></div></div>
+      <nav className="section-nav" aria-label="On this page"><a href="#where">01 Select a study area</a><a href="#satellites">02 Compare satellites</a><a href="#history">03 Understand harmonization</a><a href="#explore">04 Explore fire history</a></nav>
       {error && <div className="error" role="alert">{error} <button onClick={() => setRetry(v => v + 1)}>Retry</button></div>}
       <section id="where" className="page-section" aria-labelledby="where-title">
-        <div className="page-section-heading"><span>01</span><h2 id="where-title">Select a Region</h2><p>One selected area, shared across every section.</p></div>
+        <div className="page-section-heading"><span>01</span><h2 id="where-title">Choose your study area.</h2><p>Select a region or define your own area to explore NASA satellite observations.</p></div>
         <div className="where-grid"><div className="map-container">{meta ? <RegionMap bounds={bounds} onSelect={applyBounds} coverage={meta.coverage} /> : <div className="map-shell empty">Loading Argentina coverage…</div>}</div>
-          <section className="panel region-panel"><h3>Define your region</h3><p className="muted">Draw on the map or enter coordinates.</p>
+          <section className="panel region-panel" aria-label="Current study area">
+            <div className="presets" aria-label="Study area presets">{PRESETS.map(([name, values]) => <button key={name} aria-pressed={regionName === name} onClick={() => applyBounds(values)}>{name}</button>)}</div>
+            <div className="current-study-area"><h3>Current study area</h3><p className="study-area-name" aria-live="polite">{regionName}</p><p className="historical-record">Historical record: {monthLabel(meta?.start)} - {monthLabel(latestMonth)}</p></div>
+            <details className="custom-coordinates"><summary>Or enter coordinates for a custom bounding box</summary>
             <form onSubmit={event => { event.preventDefault(); const message = validateBounds(inputs); setFormError(message); if (!message) applyBounds(inputs.map(Number)); }}>
               <div className="coordinate-grid">{[['West longitude', 'W', 0], ['East longitude', 'E', 2], ['South latitude', 'S', 1], ['North latitude', 'N', 3]].map(([label, short, index]) =>
                 <label key={short}>{label}<div className="coordinate-input"><input aria-label={label} type="number" step="any" min={index % 2 ? -90 : -180} max={index % 2 ? 90 : 180} value={inputs[index]} onChange={event => setInputs(previous => previous.map((value, i) => i === index ? event.target.value : value))} required /><span>° {short}</span></div></label>)}</div>
-              {formError && <p className="field-error" role="alert">{formError}</p>}<button className="apply" type="submit">Apply coordinates <span>↗</span></button>
+              {formError && <p className="field-error" role="alert">{formError}</p>}<button className="apply" type="submit">Update study area</button>
             </form>
-            <div className="presets"><span>ARGENTINA REGIONS</span><button onClick={() => applyBounds([-64, -28, -59, -24])}>Gran Chaco</button><button onClick={() => applyBounds([-64, -38, -59, -33])}>Pampas</button><button onClick={() => applyBounds([-71, -50, -67, -40])}>Patagonia</button><button onClick={() => applyBounds([-74, -56, -53, -21])}>All Argentina</button></div>
+            </details>
+            <p className="small-area-warning">Small-area estimates are less reliable. Harmonization is calibrated nationally, not independently validated for each selected area.</p>
           </section>
         </div>
+        <a className="next-section" href="#satellites">Next: Compare satellite observations</a>
       </section>
       <section id="satellites" className="page-section compact-section" aria-labelledby="satellites-title">
         <div className="page-section-heading"><span>02</span><h2 id="satellites-title">Compare the Satellites</h2><p>Monthly daytime active cell-days · same y-axis scale · full record</p></div>

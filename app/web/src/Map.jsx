@@ -21,7 +21,8 @@ export default function Map({ bounds, onSelect, coverage }) {
     let instance;
     try {
       instance = new maplibregl.Map({
-        container: container.current, center: [-63.6, -38.4], zoom: 4, maxZoom: 14,
+        container: container.current, bounds: [[bounds[0], bounds[1]], [bounds[2], bounds[3]]],
+        fitBoundsOptions: { padding: { top: 76, bottom: 76, left: 30, right: 30 } }, maxZoom: 14,
         // A local style still renders the selection if the optional basemap is offline.
         style: { version: 8, sources: { basemap: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 19,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' } },
@@ -35,11 +36,9 @@ export default function Map({ bounds, onSelect, coverage }) {
     map.current = instance;
     const resize = new ResizeObserver(() => {
       instance.resize();
-      // Keep a chosen region in view when the layout changes during a map animation.
-      if (current.current !== initialBounds.current) {
-        const [w, s, e, n] = current.current;
-        instance.fitBounds([[w, s], [e < w ? e + 360 : e, n]], { padding: 50, maxZoom: 8, duration: 0 });
-      }
+      // Fit the whole study area, including Tierra del Fuego, at every screen size.
+      const [w, s, e, n] = current.current;
+      instance.fitBounds([[w, s], [e < w ? e + 360 : e, n]], { padding: { top: 76, bottom: 76, left: 30, right: 30 }, maxZoom: 8, duration: 0 });
     });
     resize.observe(container.current);
     instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
@@ -68,7 +67,7 @@ export default function Map({ bounds, onSelect, coverage }) {
     instance.getSource('selection')?.setData(polygon(bounds));
     if (bounds === initialBounds.current) return;
     const [w, s, e, n] = bounds;
-    instance.fitBounds([[w, s], [e < w ? e + 360 : e, n]], { padding: 65, maxZoom: 8, duration: 600 });
+    instance.fitBounds([[w, s], [e < w ? e + 360 : e, n]], { padding: { top: 76, bottom: 76, left: 30, right: 30 }, maxZoom: 8, duration: 600 });
   }, [bounds]);
 
   useEffect(() => {
@@ -123,7 +122,7 @@ export default function Map({ bounds, onSelect, coverage }) {
     <div ref={container} className="map" aria-label="Geographic region selection map" />
     <div className="map-toolbar"><span className="map-tag"><i /> ARGENTINA COVERAGE</span>
       <button className={drawing ? 'draw active' : 'draw'} onClick={() => setDrawing(value => !value)} aria-pressed={drawing}>
-        <span aria-hidden="true">▧</span> {drawing ? 'Cancel drawing' : 'Draw a rectangle'}</button></div>
+        <span aria-hidden="true">▧</span> {drawing ? 'Cancel drawing' : 'Select an area on the map'}</button></div>
     <div className="map-caption">{drawing ? 'Drag to select a rectangle · Esc to cancel' : 'Teal: Argentina coverage · Gold: selected area · Outside coverage dimmed'}</div>
     {notice && <div className="map-notice" role="status">{notice}</div>}
   </div>;

@@ -23,3 +23,38 @@
 .observation-controls > .footnote { grid-column: 1 / -1; margin: 0; }
 .month-quality details { margin: 6px 0; }
 .month-quality summary { cursor: pointer; }
+
+/* Study-area introduction and responsive country framing. */
+.brand small { letter-spacing: .3px; font-size: 11px; }
+.page-heading { margin: 14px 0 28px; }
+.page-heading .hero-subhead { max-width: 850px; font-size: 15px; line-height: 1.75; margin-top: 18px; color: #b5c2ca; }
+.page-heading .hero-note { margin-top: 14px; font-size: 11px; color: #94a8b4; }
+#where > .page-section-heading p { width: 100%; margin-left: 0; line-height: 1.6; font-size: 13px; }
+#where > .page-section-heading h2 { font-size: 23px; letter-spacing: -.4px; }
+.where-grid { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
+.where-grid .map-container { height: 540px; min-height: 0; }
+.where-grid .map-shell { height: 100%; min-height: 0; }
+.region-panel .presets { border: 0; margin: 0 0 28px; padding: 0; gap: 8px; }
+.region-panel .presets button { border: 1px solid #455650; border-radius: 18px; padding: 8px 12px; font-size: 11px; }
+.region-panel .presets button[aria-pressed=true] { background: #e8d18e; color: #1a272c; border-color: #e8d18e; }
+.current-study-area h3 { color: #aabdc7; font-size: 13px; }
+.study-area-name { color: #eedb9f; font: 500 25px 'Space Grotesk', sans-serif; margin: 9px 0; }
+.historical-record { color: #b4c5ce; font-size: 11px; line-height: 1.65; }
+.custom-coordinates { margin-top: 25px; border-top: 1px solid #344550; padding-top: 19px; }
+.custom-coordinates summary { cursor: pointer; color: #d1ddd9; font-size: 12px; line-height: 1.7; }
+.small-area-warning { color: #c5bd9e; font-size: 11px; line-height: 1.75; margin-top: 25px; }
+.next-section { display: block; width: fit-content; margin: 18px 0 0 auto; color: #ead69d; font-size: 12px; text-underline-offset: 4px; }
+@media(max-width:1050px) { .where-grid { grid-template-columns: minmax(0, 1fr) 320px; } }
+@media(max-width:800px) {
+  .where-grid { grid-template-columns: 1fr; }
+  .where-grid .map-container { height: 480px; }
+  .where-grid .region-panel .coordinate-grid { grid-template-columns: 1fr 1fr; }
+}
+@media(max-width:520px) {
+  .where-grid .map-container { height: 460px; }
+  .page-heading .hero-subhead { font-size: 14px; }
+  .brand small { font-size: 10px; }
+  .map-toolbar { left: 12px; top: 14px; }
+  .draw { font-size: 10px; padding: 10px; }
+  .next-section { margin-left: 0; }
+}

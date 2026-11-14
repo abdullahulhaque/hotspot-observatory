@@ -9,7 +9,7 @@ test('four ordered sections share a region and show file-backed validation', asy
   const validation = await (await request.get('/api/validation')).json();
   await page.goto('/');
   await expect(page.locator('main > .page-section')).toHaveCount(4);
-  await expect(page.locator('.page-section-heading h2')).toHaveText(['Select a Region','Compare the Satellites','Understand Harmonization','Explore Fire History']);
+  await expect(page.locator('.page-section-heading h2')).toHaveText(['Choose your study area.','Compare the Satellites','Understand Harmonization','Explore Fire History']);
   await expect(page.locator('.synthetic-banner')).toHaveCount(meta.synthetic ? 1 : 0);
   await expect(page.getByLabel('End month')).toHaveValue(meta.end);
   await expect(page.getByText('More VIIRS detections do not mean more fires occurred.', { exact:true })).toBeVisible();
@@ -27,17 +27,18 @@ test('four ordered sections share a region and show file-backed validation', asy
     await page.getByRole('button', {name,exact:true}).click();
     const area = await (await loaded).json();
     await rawLoaded;
-    await expect(page.locator('.shared-region')).toContainText(name);
+    await expect(page.locator('.study-area-name')).toContainText(name);
     await expect(page.locator('.top-years li strong').first()).toHaveText(fmt(area.top_years[0].harmonized));
     await expect(page.locator('.annual-chart')).toBeVisible();
     await expect(page.locator('.calendar-scroll')).toHaveAttribute('aria-busy','false');
     await expect(page.locator('.summary strong')).not.toHaveText(/^(0|—|No data in this area)$/);
   }
+  await page.getByText('Or enter coordinates for a custom bounding box', {exact:true}).click();
   await page.getByLabel('West longitude').fill('0');
   await page.getByLabel('East longitude').fill('1');
   await page.getByLabel('South latitude').fill('0');
   await page.getByLabel('North latitude').fill('1');
-  await page.getByRole('button', {name:/Apply coordinates/}).click();
+  await page.getByRole('button', {name:/Update study area/}).click();
   await expect(page.locator('.calendar-scroll')).toContainText('No data in this area');
   await expect(page.locator('.raw-chart-card .raw-empty')).toHaveText(['No data in this area','No data in this area']);
   await expect(page.locator('#history .empty')).toContainText('No data in this area');
@@ -123,7 +124,7 @@ test('map drawing and narrow layout work, validation has missing-file placeholde
   const canvas = page.locator('.maplibregl-canvas');
   await expect(canvas).toBeVisible();
   const previous = await page.getByLabel('West longitude').inputValue();
-  await page.getByRole('button',{name:/Draw a rectangle/}).click();
+  await page.getByRole('button',{name:/Select an area on the map/}).click();
   const rect = await canvas.boundingBox();
   await page.mouse.move(rect.x+rect.width*.3,rect.y+rect.height*.35);
   await page.mouse.down();
@@ -177,7 +178,7 @@ test('live October default, incomplete months, July estimate and NRT remain dist
   await expect(july).toHaveClass(/incomplete-cell/);
   await expect(page.locator('.calendar .gapfill')).toHaveCount(0);
   await page.getByRole('button',{name:'Pampas',exact:true}).click();
-  await expect(page.locator('.shared-region')).toContainText('Pampas');
+  await expect(page.locator('.study-area-name')).toContainText('Pampas');
   await expect(page.locator('.calendar-scroll')).toHaveAttribute('aria-busy','false');
   const responsePromise=page.waitForResponse(r=>r.url().includes('/export.csv?'));
   const downloadPromise=page.waitForEvent('download');
@@ -187,4 +188,42 @@ test('live October default, incomplete months, July estimate and NRT remain dist
   expect(new URL(response.url()).searchParams.get('metric')).toBe('raw_viirs');
   const header=(await response.text()).split('\n')[0];
   for(const column of ['source','nrt','incomplete','missing_snpp_days','lo80','hi80']) expect(header).toContain(column);
+});
+
+test('study-area introduction, responsive map and metadata dates', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.brand')).toContainText('HOTSPOT OBSERVATORY');
+  await expect(page.locator('.brand small')).toHaveText('Harmonized satellite fire history');
+  await expect(page.locator('header')).not.toContainText('Selected area');
+  await expect(page.getByRole('heading',{level:1})).toHaveText('Two satellites. One clearer fire history.');
+  await expect(page.locator('.hero-subhead')).toHaveText("MODIS and VIIRS have observed Earth's fires for decades, but their measurements aren't directly comparable. Hotspot Observatory bridges those differences to reveal historical burning patterns across Argentina from 2003 to 2026.");
+  await expect(page.locator('.hero-note')).toHaveText('Activity is measured in active cell-days, not individual fires or burned area.');
+  await expect(page.locator('.section-nav a')).toHaveText(['01 Select a study area','02 Compare satellites','03 Understand harmonization','04 Explore fire history']);
+  await expect(page.locator('#where .page-section-heading p')).toHaveText('Select a region or define your own area to explore NASA satellite observations.');
+  await expect(page.locator('.presets button')).toHaveText(['All Argentina','Gran Chaco','Pampas','Patagonia']);
+  await expect(page.locator('.study-area-name')).toHaveText('All Argentina');
+  await expect(page.locator('.historical-record')).toHaveText('Historical record: January 2003 - October 2026');
+  await expect(page.getByLabel('West longitude')).not.toBeVisible();
+  await expect(page.locator('.small-area-warning')).toBeVisible();
+  await expect(page.locator('.raw-chart')).toHaveCount(2);
+  await page.screenshot({path:'test-results/study-area-desktop.png',fullPage:true});
+  await page.locator('#where').screenshot({path:'test-results/argentina-map-desktop.png'});
+  await page.setViewportSize({width:390,height:844});
+  await expect(page.getByRole('button',{name:'Select an area on the map',exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+  await page.locator('#where').screenshot({path:'test-results/argentina-map-mobile.png'});
+  await page.screenshot({path:'test-results/study-area-mobile.png',fullPage:true});
+  await page.getByText('Or enter coordinates for a custom bounding box',{exact:true}).click();
+  await expect(page.getByLabel('West longitude')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Update study area',exact:true})).toBeVisible();
+  await page.getByRole('link',{name:'Next: Compare satellite observations',exact:true}).click();
+  await expect(page).toHaveURL(/#satellites$/);
+  // The record follows metadata, not the machine clock or fixed hero copy.
+  await page.route('**/api/meta', async route => {
+    const response=await route.fetch();
+    await route.fulfill({json:{...await response.json(), latest_complete_month:'2026-09'}});
+  });
+  await page.reload();
+  await expect(page.locator('.historical-record')).toHaveText('Historical record: January 2003 - September 2026');
+  await expect(page.getByLabel('End month')).toHaveValue('2026-09');
 });
