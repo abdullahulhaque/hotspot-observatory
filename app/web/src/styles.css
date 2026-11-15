@@ -90,18 +90,13 @@ html { scroll-behavior: smooth; }
 }
 @media(prefers-reduced-motion:reduce) { html { scroll-behavior: auto; } }
 
-/* Page layout only: shared overview row, followed by two full-width sections. */
-.overview-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-bottom: 24px; }
-.overview-row > .page-section { min-width: 0; margin-bottom: 0; }
-.four-section-page > .page-section { margin-bottom: 24px; }
-@media(min-width:1200px) {
-  .overview-row { grid-template-columns: minmax(0, 55fr) minmax(0, 45fr); align-items: stretch; }
-  .overview-row > .page-section,
-  .four-section-page > .page-section { padding: 24px; }
-  .overview-row .page-section-heading { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; }
-  .overview-row .page-section-heading p { grid-column: 1 / -1; margin-left: 0; }
-  .overview-row .where-grid,
-  .overview-row .raw-chart-pair { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+/* Four full-width sections share the same outer spacing and card padding. */
+.four-section-page > section.page-section { min-width: 0; margin: 0 0 24px; padding: 24px; }
+@media(max-width:1050px) {
+  .four-section-page > section.page-section { padding: 18px; }
+}
+@media(max-width:600px) {
+  .four-section-page > section.page-section { padding: 15px 12px; }
 }
 
 /* Compact sticky application header and restrained hero hierarchy. */
@@ -139,8 +134,8 @@ html { scroll-padding-top: var(--header-height); }
 }
 
 /* Section 01: restrained map selection and study-area details. */
-#where { background: #111d25; border: 1px solid #2b3a44; border-radius: 8px; padding: 24px; }
-#where .where-grid { gap: 20px; }
+#where { background: #111d25; border: 1px solid #2b3a44; border-radius: 8px; }
+#where .where-grid { grid-template-columns: minmax(0, 65fr) minmax(0, 35fr); gap: 20px; }
 #where .map-container { border-color: #354550; border-radius: 5px; }
 #where .region-panel { padding: 18px; background: #14212b; border: 1px solid #354550; border-radius: 5px; }
 #where .presets { gap: 8px; margin-bottom: 20px; }
@@ -167,10 +162,8 @@ html { scroll-padding-top: var(--header-height); }
 #where .maplibregl-ctrl-group { box-shadow: none; border: 1px solid #607785; }
 #where button:focus-visible, #where a:focus-visible, #where input:focus-visible, #where summary:focus-visible { outline: 2px solid #b7c8d4; outline-offset: 3px; }
 #where .presets button:hover, #where .apply:hover, #where .draw:hover { border-color: #b7c8d4; }
-@media(max-width:1199px) and (min-width:801px) { #where .where-grid { grid-template-columns: minmax(0, 1fr) 310px; } }
-@media(max-width:800px) { #where { padding: 18px; } }
+@media(max-width:900px) { #where .where-grid { grid-template-columns: minmax(0, 1fr); } }
 @media(max-width:520px) {
-  #where { padding: 15px 12px; }
   #where .region-panel { padding: 14px; }
   #where .map-tag { display: none; }
   #where .map-caption { font-size: 9px; gap: 5px 10px; }

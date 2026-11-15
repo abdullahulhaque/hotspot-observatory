@@ -157,7 +157,6 @@ export default function App() {
     <main className="four-section-page">
       <div className="page-heading"><div><h1>Harmonized fire activity from MODIS and VIIRS</h1><p className="hero-subhead">Explore decades of satellite-detected fire activity through a unified historical record. Compare burning patterns across regions, seasons, and years, identify unusual activity, and investigate long-term trends using NASA observations calibrated for differences between satellite instruments.</p><p className="hero-note">Current coverage: {meta?.country || 'Argentina'}, {meta?.start?.slice(0, 4) || '2003'}–{latestMonth?.slice(0, 4) || '2026'} · More regions planned</p><details className="measurement-explanation"><summary>Data and methods</summary><p>Argentina is divided into 0.1° geographic grid cells. Each cell with at least one hotspot detection on a day contributes one active cell-day. The same cell can count again on another day. This measures satellite-detected activity, not unique fires or burned area.</p></details></div></div>
       {error && <div className="error" role="alert">{error} <button onClick={() => setRetry(v => v + 1)}>Retry</button></div>}
-      <div className="overview-row">
       <section id="where" className="page-section" aria-labelledby="where-title">
         <div className="page-section-heading"><span>01</span><h2 id="where-title">Choose your study area.</h2><p>Select a region or define your own area to explore NASA satellite observations.</p></div>
         <div className="where-grid"><div className="map-container">{meta ? <RegionMap bounds={bounds} onSelect={applyBounds} coverage={meta.coverage} /> : <div className="map-shell empty">Loading Argentina coverage…</div>}</div>
@@ -181,7 +180,6 @@ export default function App() {
       <section id="satellites" className="page-section compact-section" aria-labelledby="satellites-title">
         <SensorComparison daytime={daytime} loading={dayLoading} error={dayError} meta={meta} bounds={bounds} regionName={regionName} retry={retry} getJSON={getJSON}/>
       </section>
-      </div>
       <section id="history" className="page-section compact-section" aria-labelledby="history-title">
         <div className="page-section-heading"><span>03</span><h2 id="history-title">Making satellite observations comparable</h2><p>We calibrate MODIS observations against VIIRS using overlapping years, then test the correction on observations excluded from model training.</p></div>
         <MethodPanel validation={validation} calibration={meta?.calibration}>

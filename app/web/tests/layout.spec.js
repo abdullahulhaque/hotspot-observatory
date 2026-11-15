@@ -1,18 +1,35 @@
 import { test, expect } from '@playwright/test';
 
-test('desktop overview is 55/45, lower sections are full width, and row anchors stay usable', async ({page}) => {
+async function expectFullWidthSections(page) {
+  const sections = page.locator('main > section.page-section');
+  await expect(sections).toHaveCount(4);
+  const boxes = await Promise.all(['where','satellites','history','explore'].map(id=>page.locator(`#${id}`).boundingBox()));
+  for (let i=1;i<boxes.length;i++) {
+    expect(boxes[i].y - boxes[i-1].y - boxes[i-1].height).toBeCloseTo(24, 0);
+    expect(boxes[i].x).toBeCloseTo(boxes[0].x, 0);
+    expect(boxes[i].width).toBeCloseTo(boxes[0].width, 0);
+  }
+  const paddings = await sections.evaluateAll(elements=>elements.map(el=>getComputedStyle(el).padding));
+  expect(new Set(paddings).size).toBe(1);
+}
+
+test('desktop sections are full width, study area is 65/35, and sensor panels are balanced', async ({page}) => {
   await page.goto('/');
   await expect(page.locator('.raw-chart')).toHaveCount(2);
-  const box = id => page.locator(`#${id}`).boundingBox();
-  const [where, satellites, history, explore] = await Promise.all(['where','satellites','history','explore'].map(box));
-  expect(Math.abs(where.y - satellites.y)).toBeLessThan(1);
-  expect(where.width / (where.width + satellites.width)).toBeCloseTo(.55, 2);
-  expect(satellites.x).toBeGreaterThan(where.x + where.width);
-  expect(history.y).toBeGreaterThanOrEqual(Math.max(where.y + where.height, satellites.y + satellites.height));
-  expect(history.x).toBeCloseTo(where.x, 0);
-  expect(history.width).toBeCloseTo(satellites.x + satellites.width - where.x, 0);
-  expect(explore.x).toBeCloseTo(history.x, 0);
-  expect(explore.width).toBeCloseTo(history.width, 0);
+  await expectFullWidthSections(page);
+  const map = await page.locator('#where .map-container').boundingBox();
+  const controls = await page.locator('#where .region-panel').boundingBox();
+  expect(map.y).toBeCloseTo(controls.y, 0);
+  expect(map.width / (map.width + controls.width)).toBeCloseTo(.65, 2);
+  expect(controls.x).toBeGreaterThan(map.x + map.width);
+  for (const selector of ['.sensor-overview-card', '.raw-chart-card']) {
+    const cards = page.locator(`#satellites ${selector}`);
+    const [modis, viirs] = await Promise.all([cards.nth(0).boundingBox(), cards.nth(1).boundingBox()]);
+    expect(modis.y).toBeCloseTo(viirs.y, 0);
+    expect(modis.width).toBeCloseTo(viirs.width, 0);
+    expect(viirs.x).toBeGreaterThan(modis.x + modis.width);
+    expect(modis.width).toBeGreaterThan(500);
+  }
   const current = page.locator('.section-nav [aria-current="location"]');
   await expect(current).toHaveText('Study Area');
   await page.getByRole('link',{name:'Compare Sensors',exact:true}).click();
@@ -27,21 +44,31 @@ test('desktop overview is 55/45, lower sections are full width, and row anchors 
 test('tablet and mobile stack all sections in order and retain the region selection', async ({page}) => {
   await page.goto('/');
   await page.getByRole('button',{name:'Gran Chaco',exact:true}).click();
-  for (const width of [1024, 390]) {
+  for (const width of [1024, 820, 390, 320]) {
     await page.setViewportSize({width,height:1000});
     await expect(page.locator('.calendar-scroll')).toHaveAttribute('aria-busy','false');
-    const boxes = await Promise.all(['where','satellites','history','explore'].map(id=>page.locator(`#${id}`).boundingBox()));
-    for (let i=1;i<boxes.length;i++) {
-      expect(boxes[i].y).toBeGreaterThanOrEqual(boxes[i-1].y+boxes[i-1].height);
-      expect(boxes[i].x).toBeCloseTo(boxes[0].x,0);
-      expect(boxes[i].width).toBeCloseTo(boxes[0].width,0);
+    await expectFullWidthSections(page);
+    const map = await page.locator('#where .map-container').boundingBox();
+    const controls = await page.locator('#where .region-panel').boundingBox();
+    if (width > 900) {
+      expect(map.y).toBeCloseTo(controls.y, 0);
+      expect(map.width / (map.width + controls.width)).toBeCloseTo(.65, 2);
+    } else {
+      expect(controls.y).toBeGreaterThan(map.y + map.height);
+      expect(controls.x).toBeCloseTo(map.x, 0);
+      expect(controls.width).toBeCloseTo(map.width, 0);
     }
     await expect(page.locator('.study-area-name')).toHaveText('Gran Chaco');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
     // The long mobile page exceeds the software renderer's full-image limit.
     // Capture each section while retaining all page geometry assertions above.
     if (width <= 600) {
-      for (const id of ['where','satellites','history','explore']) await page.locator(`#${id}`).screenshot({path:`test-results/analytics-layout-${width}-${id}.png`});
+      for (const id of ['where','satellites','history','explore']) {
+        const section = page.locator(`#${id}`);
+        // Keep the sticky header above the section instead of across the capture.
+        await section.evaluate(el=>window.scrollTo({top:window.scrollY+el.getBoundingClientRect().top-document.querySelector('.topbar').getBoundingClientRect().height-16,behavior:'instant'}));
+        await section.screenshot({path:`test-results/analytics-layout-${width}-${id}.png`});
+      }
     } else await page.screenshot({path:`test-results/analytics-layout-${width}.png`,fullPage:true});
   }
 });
