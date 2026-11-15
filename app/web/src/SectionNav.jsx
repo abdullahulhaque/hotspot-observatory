@@ -11,8 +11,15 @@ export default function SectionNav() {
       frame = requestAnimationFrame(() => {
         const threshold = Math.min(180, window.innerHeight * .25);
         let current = 'where';
+        let currentTop = -Infinity;
         for (const [id] of SECTIONS) {
-          if (document.getElementById(id)?.getBoundingClientRect().top <= threshold) current = id;
+          const top = document.getElementById(id)?.getBoundingClientRect().top;
+          // Adjacent desktop sections share a row: keep its first section active,
+          // or the explicitly linked section, until the next row enters view.
+          if (top <= threshold && (top > currentTop + 1 || Math.abs(top - currentTop) <= 1 && window.location.hash === `#${id}`)) {
+            current = id;
+            currentTop = top;
+          }
         }
         if (window.scrollY > 0 && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2) current = 'explore';
         setActive(current);
@@ -20,6 +27,7 @@ export default function SectionNav() {
     };
     window.addEventListener('scroll', update, { passive: true });
     window.addEventListener('resize', update);
+    window.addEventListener('hashchange', update);
     const observer = new ResizeObserver(update);
     for (const [id] of SECTIONS) {
       const section = document.getElementById(id);
@@ -31,6 +39,7 @@ export default function SectionNav() {
       observer.disconnect();
       window.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
+      window.removeEventListener('hashchange', update);
     };
   }, []);
   return <nav className="section-nav" aria-label="On this page">{SECTIONS.map(([id, label]) =>

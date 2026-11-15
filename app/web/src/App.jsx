@@ -160,6 +160,7 @@ export default function App() {
       <div className="page-heading"><div><h1>Harmonized fire activity from MODIS and VIIRS</h1><p className="hero-subhead">Explore decades of satellite-detected fire activity through a unified historical record. Compare burning patterns across regions, seasons, and years, identify unusual activity, and investigate long-term trends using NASA observations calibrated for differences between satellite instruments.</p><p className="hero-note">Current coverage: {meta?.country || 'Argentina'}, {meta?.start?.slice(0, 4) || '2003'}–{latestMonth?.slice(0, 4) || '2026'} · More regions planned</p><details className="measurement-explanation"><summary>Data and methods</summary><p>Argentina is divided into 0.1° geographic grid cells. Each cell with at least one hotspot detection on a day contributes one active cell-day. The same cell can count again on another day. This measures satellite-detected activity, not unique fires or burned area.</p></details></div></div>
       <SectionNav/>
       {error && <div className="error" role="alert">{error} <button onClick={() => setRetry(v => v + 1)}>Retry</button></div>}
+      <div className="overview-row">
       <section id="where" className="page-section" aria-labelledby="where-title">
         <div className="page-section-heading"><span>01</span><h2 id="where-title">Choose your study area.</h2><p>Select a region or define your own area to explore NASA satellite observations.</p></div>
         <div className="where-grid"><div className="map-container">{meta ? <RegionMap bounds={bounds} onSelect={applyBounds} coverage={meta.coverage} /> : <div className="map-shell empty">Loading Argentina coverage…</div>}</div>
@@ -185,6 +186,7 @@ export default function App() {
         <div className="sensor-table-wrap"><table className="sensor-comparison-table"><thead><tr><th>Sensor</th><th>Record begins</th><th>Pixel size</th><th>What it detects</th></tr></thead><tbody><tr><th>MODIS Aqua</th><td>Mid-2002</td><td>~1 km</td><td>Larger thermal signals</td></tr><tr><th>VIIRS S-NPP</th><td>2012</td><td>375 m</td><td>Catches smaller fires</td></tr></tbody></table></div>
         <p className="sensor-caution">More VIIRS detections do not mean more fires occurred.</p><p className="footnote">Sensor record dates are shown above; this Argentina dataset begins in {meta?.start || '2003-01'}.</p>
       </section>
+      </div>
       <section id="history" className="page-section compact-section" aria-labelledby="history-title">
         <div className="page-section-heading"><span>03</span><h2 id="history-title">Understand Harmonization</h2><p>A consistent scale across the sensor change.</p></div>
         <WhyHarmonize data={area} loading={areaLoading} error={areaError} compact />

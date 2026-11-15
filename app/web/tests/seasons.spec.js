@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 const fmt = value => new Intl.NumberFormat('en-US', {maximumFractionDigits:1}).format(value);
 
 test('navigation tracks initial load, scroll, links and reduced motion', async ({page}) => {
+  await page.setViewportSize({width:1024,height:1100});
   await page.goto('/');
   const current = page.locator('.section-nav [aria-current="location"]');
   await expect(current).toHaveText('01 Select a study area');

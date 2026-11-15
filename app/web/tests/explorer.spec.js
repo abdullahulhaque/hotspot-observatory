@@ -8,7 +8,7 @@ test('four ordered sections share a region and show file-backed validation', asy
   const meta = await (await request.get('/api/meta')).json();
   const validation = await (await request.get('/api/validation')).json();
   await page.goto('/');
-  await expect(page.locator('main > .page-section')).toHaveCount(4);
+  await expect(page.locator('main .page-section')).toHaveCount(4);
   await expect(page.locator('.page-section-heading h2')).toHaveText(['Choose your study area.','Compare the Satellites','Understand Harmonization','Explore Fire History']);
   await expect(page.locator('.synthetic-banner')).toHaveCount(meta.synthetic ? 1 : 0);
   await expect(page.getByLabel('End month')).toHaveValue(meta.end);

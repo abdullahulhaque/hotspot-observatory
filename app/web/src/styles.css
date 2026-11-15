@@ -89,3 +89,17 @@ html { scroll-behavior: smooth; }
   .season-scroll-hint { display: block; }
 }
 @media(prefers-reduced-motion:reduce) { html { scroll-behavior: auto; } }
+
+/* Page layout only: shared overview row, followed by two full-width sections. */
+.overview-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-bottom: 24px; }
+.overview-row > .page-section { min-width: 0; margin-bottom: 0; }
+.four-section-page > .page-section { margin-bottom: 24px; }
+@media(min-width:1200px) {
+  .overview-row { grid-template-columns: minmax(0, 55fr) minmax(0, 45fr); align-items: stretch; }
+  .overview-row > .page-section,
+  .four-section-page > .page-section { padding: 24px; }
+  .overview-row .page-section-heading { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; }
+  .overview-row .page-section-heading p { grid-column: 1 / -1; margin-left: 0; }
+  .overview-row .where-grid,
+  .overview-row .raw-chart-pair { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+}
