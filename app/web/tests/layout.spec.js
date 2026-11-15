@@ -22,7 +22,7 @@ test('desktop sections are full width, study area is 65/35, and sensor panels ar
   expect(map.y).toBeCloseTo(controls.y, 0);
   expect(map.width / (map.width + controls.width)).toBeCloseTo(.65, 2);
   expect(controls.x).toBeGreaterThan(map.x + map.width);
-  for (const selector of ['.sensor-overview-card', '.raw-chart-card']) {
+  for (const selector of ['.raw-chart-card']) {
     const cards = page.locator(`#satellites ${selector}`);
     const [modis, viirs] = await Promise.all([cards.nth(0).boundingBox(), cards.nth(1).boundingBox()]);
     expect(modis.y).toBeCloseTo(viirs.y, 0);

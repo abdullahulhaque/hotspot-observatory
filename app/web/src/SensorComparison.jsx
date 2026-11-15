@@ -1,18 +1,6 @@
 import { useEffect, useState } from 'react';
 import SensorChart, { monthKey } from './SensorChart.jsx';
 
-function PixelFootprint({ sensor, cells, resolution, color }) {
-  const size = 96, step = size / cells;
-  return <svg className="pixel-footprint" viewBox="0 0 152 128" role="img" aria-label={`${sensor}: ${cells} by ${cells} nominal ${resolution} pixels over a conceptual 3 km by 3 km footprint, not measured NASA observations`}>
-    <rect x="28" y="6" width={size} height={size} fill="none" stroke={color}/>
-    {Array.from({ length: cells - 1 }, (_, i) => <g key={i} stroke={color} strokeWidth=".7">
-      <line x1={28 + (i + 1) * step} x2={28 + (i + 1) * step} y1="6" y2="102"/>
-      <line x1="28" x2="124" y1={6 + (i + 1) * step} y2={6 + (i + 1) * step}/>
-    </g>)}
-    <text x="76" y="120" textAnchor="middle">3 km × 3 km footprint</text>
-  </svg>;
-}
-
 export default function SensorComparison({ daytime, loading, error, meta, bounds, regionName, retry, getJSON }) {
   const [period, setPeriod] = useState('D'), [hoveredMonth, setHoveredMonth] = useState('');
   const [night, setNight] = useState(null), [nightLoading, setNightLoading] = useState(false), [nightError, setNightError] = useState('');
@@ -33,15 +21,15 @@ export default function SensorComparison({ daytime, loading, error, meta, bounds
   const index = Math.max(0, rows.findIndex(row => monthKey(row) === month));
   return <>
     <div className="page-section-heading"><span>02</span><h2 id="satellites-title">Compare the Satellites</h2><p>Different instruments · shared study area</p></div>
-    <div className="sensor-overview">
-      {[['MODIS Aqua', 3, '≈ 1 km', '#79b3b2', meta?.start ? `${meta.start.slice(0, 4)} onward` : 'Loading…'], ['VIIRS S-NPP', 8, '≈ 375 m', '#cbb278', '2012 onward']].map(([name, cells, resolution, color, record]) => <article className="sensor-overview-card" key={name}>
-        <h3 style={{ color }}>{name}</h3>
-        <dl><dt>Nominal active-fire pixel resolution</dt><dd>{resolution}</dd><dt>Historical coverage in our dataset</dt><dd>{record}</dd></dl>
-        <PixelFootprint sensor={name} cells={cells} resolution={resolution} color={color}/>
-      </article>)}
-    </div>
-    <p className="pixel-caption">Conceptual nominal pixel comparison over the same geographic footprint; not measured NASA observations.</p>
-    <p className="sensor-explanation">Resolution, detection sensitivity, and observation timing affect the number of hotspots each instrument reports.</p>
+    <table className="instrument-comparison" aria-label="Instrument comparison">
+      <thead><tr><th scope="col">Instrument</th><th scope="col" className="modis-instrument">MODIS Aqua</th><th scope="col" className="viirs-instrument">VIIRS S-NPP</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Historical coverage in our dataset</th><td>{meta?.start ? `${meta.start.slice(0, 4)} onward` : 'Loading…'}</td><td>2012 onward</td></tr>
+        <tr><th scope="row">Nominal active-fire pixel resolution</th><td>≈ 1 km</td><td>≈ 375 m</td></tr>
+        <tr><th scope="row">Relative detection sensitivity</th><td>Less sensitive to small hotspots</td><td>More sensitive to small hotspots</td></tr>
+      </tbody>
+    </table>
+    <p className="sensor-explanation">Differences in pixel resolution, detection sensitivity, and observation timing mean the same burning activity can produce different hotspot counts.</p>
     <div className="sensor-observation-controls"><div><h3>Raw observations</h3><p>{regionName} · {meta?.start || '…'} to {meta?.end || '…'}</p></div><label>Observation period<select aria-label="Sensor observation period" value={period} onChange={event => setPeriod(event.target.value)}><option value="D">Daytime</option><option value="N">Nighttime</option></select></label></div>
     <p className="sensor-units">Monthly {period === 'D' ? 'daytime' : 'nighttime'} active cell-days · matching axes · missing observations are unavailable</p>
     {series?.synthetic && <p className="quality-notice" role="status">Synthetic development data — not NASA observations.</p>}

@@ -170,15 +170,12 @@ html { scroll-padding-top: var(--header-height); }
 }
 
 /* Section 02: instrument capabilities and aligned raw observations. */
-#satellites .sensor-overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-#satellites .sensor-overview-card { min-width: 0; padding: 14px; background: #14212b; border: 1px solid #354550; border-radius: 5px; }
-#satellites .sensor-overview-card h3 { font-size: 15px; }
-#satellites .sensor-overview-card dl { margin: 14px 0 6px; display: grid; grid-template-rows: 32px auto 32px auto; gap: 5px; }
-#satellites .sensor-overview-card dt { color: #aabcc8; font-size: 11px; line-height: 1.45; }
-#satellites .sensor-overview-card dd { margin: 0 0 7px; color: #e1e9ef; font-size: 14px; }
-#satellites .pixel-footprint { display: block; width: 100%; max-width: 152px; height: auto; margin: 10px auto 0; }
-#satellites .pixel-footprint text { fill: #b7c8d4; font-size: 10px; }
-#satellites .pixel-caption { font-size: 10px; color: #aabcc8; line-height: 1.6; margin-top: 8px; }
+#satellites .instrument-comparison { width: 100%; table-layout: fixed; border-collapse: collapse; background: #14212b; border: 1px solid #354550; font-size: 12px; line-height: 1.6; }
+#satellites .instrument-comparison th, #satellites .instrument-comparison td { padding: 10px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid #354550; overflow-wrap: break-word; }
+#satellites .instrument-comparison th { font-weight: 500; color: #aabcc8; }
+#satellites .instrument-comparison td { color: #e1e9ef; }
+#satellites .instrument-comparison .modis-instrument { color: #79b3b2; }
+#satellites .instrument-comparison .viirs-instrument { color: #cbb278; }
 #satellites .sensor-explanation { color: #c2cfd8; font-size: 12px; line-height: 1.65; margin-top: 12px; }
 #satellites .sensor-observation-controls { display: flex; justify-content: space-between; align-items: end; flex-wrap: wrap; gap: 12px; margin-top: 20px; padding-top: 18px; border-top: 1px solid #354550; }
 #satellites .sensor-observation-controls h3 { font-size: 15px; }
@@ -201,9 +198,8 @@ html { scroll-padding-top: var(--header-height); }
 #satellites select:focus-visible, #satellites input:focus-visible { outline: 2px solid #b7c8d4; outline-offset: 3px; }
 @media(max-width:600px) {
   #satellites .raw-chart-pair { grid-template-columns: minmax(0, 1fr); }
-  #satellites .sensor-overview-card { padding: 10px; }
-  #satellites .sensor-overview-card h3 { font-size: 13px; }
-  #satellites .sensor-overview-card dl { grid-template-rows: 48px auto 48px auto; }
+  #satellites .instrument-comparison { font-size: 11px; }
+  #satellites .instrument-comparison th, #satellites .instrument-comparison td { padding: 8px; }
   #satellites .raw-chart-card { padding: 14px 10px; }
 }
 

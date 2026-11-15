@@ -1,16 +1,16 @@
 import { test, expect } from '@playwright/test';
 const fmt = value => value == null ? 'Unavailable' : new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(value);
 
-test('sensor overview has proportional conceptual grids and responsive paired charts', async ({ page }) => {
+test('compact instrument table replaces specification cards and preserves responsive paired charts', async ({ page }) => {
   await page.goto('/');
   const section = page.locator('#satellites');
   await expect(section.locator('.raw-chart')).toHaveCount(2);
-  await expect(section.locator('.sensor-overview-card h3')).toHaveText(['MODIS Aqua', 'VIIRS S-NPP']);
-  await expect(section.locator('.sensor-overview-card dd')).toHaveText(['≈ 1 km', '2003 onward', '≈ 375 m', '2012 onward']);
-  const grids = section.locator('.pixel-footprint');
-  await expect(grids.first()).toHaveAccessibleName(/3 by 3 nominal ≈ 1 km pixels/);
-  await expect(grids.nth(1)).toHaveAccessibleName(/8 by 8 nominal ≈ 375 m pixels/);
-  await expect(section.locator('.pixel-caption')).toContainText('not measured NASA observations');
+  const table = section.getByRole('table', { name: 'Instrument comparison' });
+  await expect(table.getByRole('columnheader')).toHaveText(['Instrument', 'MODIS Aqua', 'VIIRS S-NPP']);
+  await expect(table.getByRole('rowheader')).toHaveText(['Historical coverage in our dataset', 'Nominal active-fire pixel resolution', 'Relative detection sensitivity']);
+  await expect(table.getByRole('cell')).toHaveText(['2003 onward', '2012 onward', '≈ 1 km', '≈ 375 m', 'Less sensitive to small hotspots', 'More sensitive to small hotspots']);
+  await expect(section.locator('.sensor-overview-card, .pixel-footprint')).toHaveCount(0);
+  await expect(section.locator('.sensor-explanation')).toContainText('observation timing');
   for (const width of [1440, 1024, 390, 320]) {
     await page.setViewportSize({ width, height: 1100 });
     const [left, right] = await Promise.all([0, 1].map(i => section.locator('.raw-chart-card').nth(i).boundingBox()));
@@ -20,6 +20,7 @@ test('sensor overview has proportional conceptual grids and responsive paired ch
       expect(right.x).toBeGreaterThan(left.x + left.width);
     } else expect(right.y).toBeGreaterThanOrEqual(left.y + left.height);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await table.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.getByRole('link', { name: 'Compare Sensors', exact: true }).click();
     await expect.poll(() => section.evaluate(el => Math.abs(el.getBoundingClientRect().top - document.querySelector('.topbar').getBoundingClientRect().bottom - 16))).toBeLessThan(3);
     await section.screenshot({ path: `test-results/sensor-comparison-${width}.png` });
