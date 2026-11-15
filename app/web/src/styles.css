@@ -183,6 +183,15 @@ html { scroll-padding-top: var(--header-height); }
 #satellites .sensor-observation-controls label { font-size: 11px; }
 #satellites .sensor-observation-controls select { margin-top: 6px; min-width: 120px; }
 #satellites .sensor-units { font-size: 10px; color: #aabcc8; line-height: 1.6; margin: 12px 0; }
+#satellites .observation-comparison { margin-top: 16px; padding: 16px; border: 1px solid #354550; border-radius: 5px; background: #14212b; }
+#satellites .observation-comparison h3 { font-size: 15px; }
+#satellites .observation-comparison p { margin-top: 8px; color: #b4c5ce; font-size: 11px; line-height: 1.65; }
+#satellites .observation-values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 14px 0; }
+#satellites .observation-values dt { font-size: 11px; color: #b4c5ce; }
+#satellites .observation-values dd { margin: 7px 0 0; font-size: 18px; color: #e1e9ef; font-variant-numeric: tabular-nums; }
+#satellites .observation-values .observation-quality { font-size: 10px; line-height: 1.6; color: #b4c5ce; }
+#satellites .observation-comparison .quality-notice { color: #dfbc9f; }
+@media(max-width:800px) { #satellites .observation-values { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 #satellites .raw-chart-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
 #satellites .raw-chart-card { padding: 12px 8px; border: 1px solid #354550; border-radius: 5px; background: #101b23; }
 #satellites .raw-chart-card h3 { font-size: 12px; gap: 6px; }

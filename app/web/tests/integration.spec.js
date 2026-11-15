@@ -40,7 +40,10 @@ test('presets and custom coordinates propagate identical geography through every
     await slider.focus(); await page.keyboard.press('End');
     const latest = series.data.at(-1);
     await expect(page.locator('.raw-hover strong')).toHaveText([fmt(latest.raw_modis), fmt(latest.raw_viirs)]);
-    const max = Math.max(...series.data.flatMap(r => [r.raw_modis ?? 0, r.raw_viirs ?? 0]));
+    await expect(page.locator('.observation-comparison .observation-context')).toContainText(name);
+    await expect(page.locator('.observation-comparison [data-metric=raw_modis]')).toHaveText(fmt(latest.raw_modis));
+    await expect(page.locator('.observation-comparison [data-metric=raw_viirs]')).toHaveText(fmt(latest.raw_viirs));
+    const max = Math.max(...series.data.filter(r => r.year >= 2012).flatMap(r => [r.raw_modis ?? 0, r.raw_viirs ?? 0]));
     for (const chart of await page.locator('.raw-chart').all()) await expect(chart).toHaveAttribute('data-y-max', String(max));
     await expect(page.locator('#history .why-panel > .muted')).toContainText(name);
     await expect(page.locator('.validation-metric > strong')).toHaveText(nationalScores);

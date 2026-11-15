@@ -1,6 +1,60 @@
 import { test, expect } from '@playwright/test';
 const fmt = value => value == null ? 'Unavailable' : new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(value);
 
+test('overlap defaults, full history and selected-month raw comparisons retain actual values and quality warnings', async ({ page, request }) => {
+  const meta = await (await request.get('/api/meta')).json();
+  const params = new URLSearchParams({ bbox: '-64,-28,-59,-24', start: meta.start, end: meta.end, daynight: 'D' });
+  const data = (await (await request.get(`/api/series?${params}`)).json()).data;
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Gran Chaco', exact: true }).click();
+  const section = page.locator('#satellites'), panel = section.locator('.observation-comparison');
+  const range = page.getByLabel('Sensor comparison range'), slider = page.getByLabel('Inspect satellite month');
+  await expect(range).toHaveValue('overlap');
+  await expect(panel).toContainText('Gran Chaco');
+  const overlap = data.filter(row => row.year >= 2012);
+  await expect(slider).toHaveAttribute('max', String(overlap.length - 1));
+  const maximum = Math.max(1, ...overlap.flatMap(row => [row.raw_modis, row.raw_viirs]).filter(v => v != null));
+  for (const chart of await section.locator('.raw-chart').all()) {
+    await expect(chart).toHaveAttribute('data-y-max', String(maximum));
+    await expect(chart).toContainText('2012');
+    await expect(chart).not.toContainText('2003');
+  }
+  for (const date of ['2025-10', '2026-10', '2026-03', '2026-07']) {
+    const index = overlap.findIndex(row => `${row.year}-${String(row.month).padStart(2, '0')}` === date);
+    const row = overlap[index];
+    await slider.fill(String(index));
+    await expect(panel.locator('.observation-context')).toHaveText(`Gran Chaco · ${date} · Daytime`);
+    await expect(panel.locator('[data-metric=raw_modis]')).toHaveText(fmt(row.raw_modis));
+    await expect(panel.locator('[data-metric=raw_viirs]')).toHaveText(fmt(row.raw_viirs));
+    if (date === '2026-03' || date === '2026-07') {
+      await expect(panel).toContainText('Incomplete observations');
+      await expect(panel.locator('[data-metric=difference]')).toHaveText('Unavailable');
+      await expect(panel.locator('[data-metric=ratio]')).toHaveText('Unavailable');
+      await expect(panel).toContainText('difference and ratio are withheld');
+    } else {
+      await expect(panel.locator('[data-metric=difference]')).toHaveText(new Intl.NumberFormat('en', { maximumFractionDigits: 1, signDisplay: 'exceptZero' }).format(row.raw_viirs - row.raw_modis));
+      await expect(panel.locator('[data-metric=ratio]')).toHaveText(`${new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(row.raw_viirs / row.raw_modis)}×`);
+    }
+    if (row.nrt) await expect(panel).toContainText('provisional NRT');
+  }
+  const chart = section.locator('.raw-chart').first();
+  await chart.scrollIntoViewIfNeeded();
+  const rect = await chart.boundingBox();
+  await page.mouse.move(rect.x + rect.width * .5, rect.y + rect.height * .5);
+  const hovered = await chart.locator('.chart-cursor').getAttribute('data-month');
+  await expect(panel.locator('.observation-context')).toContainText(hovered);
+  await range.selectOption('full');
+  await expect(slider).toHaveAttribute('max', String(data.length - 1));
+  await slider.focus(); await page.keyboard.press('Home');
+  await expect(panel.locator('[data-metric=raw_modis]')).toHaveText(fmt(data[0].raw_modis));
+  await expect(panel.locator('[data-metric=raw_viirs]')).toHaveText('Unavailable');
+  await expect(panel).toContainText('Missing / unavailable');
+  await expect(panel.locator('[data-metric=ratio]')).toHaveText('Unavailable');
+  await range.selectOption('overlap');
+  await expect(panel.locator('.observation-context')).toContainText(meta.end);
+  await expect(panel).toContainText('do not measure unique wildfires');
+});
+
 test('compact instrument table replaces specification cards and preserves responsive paired charts', async ({ page }) => {
   await page.goto('/');
   const section = page.locator('#satellites');
@@ -31,6 +85,7 @@ test('night raw observations use actual regional data, shared axes, linked month
   const meta = await (await request.get('/api/meta')).json();
   await page.goto('/');
   await page.getByRole('button', { name: 'Gran Chaco', exact: true }).click();
+  await page.getByLabel('Sensor comparison range').selectOption('full');
   const section = page.locator('#satellites');
   await expect(section.locator('.sensor-observation-controls')).toContainText('Gran Chaco');
   const loaded = page.waitForResponse(r => r.url().includes('/series?') && new URL(r.url()).searchParams.get('daynight') === 'N' && new URL(r.url()).searchParams.get('bbox') === '-64,-28,-59,-24');

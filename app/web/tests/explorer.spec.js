@@ -45,12 +45,13 @@ test('four ordered sections share a region and show file-backed validation', asy
   expect(errors).toEqual([]);
 });
 
-test('raw charts share y scale and hover, and always show full-record daytime data', async ({ page, request }) => {
+test('raw charts share y scale and hover, and offer full-record daytime data independently of Explore', async ({ page, request }) => {
   const meta = await (await request.get('/api/meta')).json();
   const params = new URLSearchParams({bbox:'-74,-56,-53,-21',start:meta.start,end:meta.end,daynight:'D'});
   const data = (await (await request.get(`/api/series?${params}`)).json()).data;
   const maximum = Math.max(1,...data.flatMap(r => [r.raw_modis || 0,r.raw_viirs || 0]));
   await page.goto('/');
+  await page.getByLabel('Sensor comparison range').selectOption('full');
   const charts = page.locator('.raw-chart');
   await expect(charts).toHaveCount(2);
   for (const chart of await charts.all()) await expect(chart).toHaveAttribute('data-y-max', String(maximum));
