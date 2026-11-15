@@ -137,3 +137,41 @@ html { scroll-padding-top: var(--header-height); }
   .topbar .section-nav { gap: 8px; }
   .topbar .section-nav a { font-size: 10px; }
 }
+
+/* Section 01: restrained map selection and study-area details. */
+#where { background: #111d25; border: 1px solid #2b3a44; border-radius: 8px; padding: 24px; }
+#where .where-grid { gap: 20px; }
+#where .map-container { border-color: #354550; border-radius: 5px; }
+#where .region-panel { padding: 18px; background: #14212b; border: 1px solid #354550; border-radius: 5px; }
+#where .presets { gap: 8px; margin-bottom: 20px; }
+#where .presets button { border: 1px solid #435460; border-radius: 4px; padding: 9px 11px; color: #bccad3; background: transparent; }
+#where .presets button[aria-pressed=true] { color: #edf2f5; background: #2a3b48; border-color: #91a7b6; }
+#where .current-study-area h3 { color: #aabdc7; font-size: 12px; }
+#where .study-area-name { color: #e1e9ef; font-size: 22px; margin: 8px 0; }
+#where .historical-record { font-size: 12px; }
+#where .coverage-note, #where .coordinate-help { color: #aabcc8; font-size: 11px; line-height: 1.65; margin-top: 12px; }
+#where .custom-coordinates { margin-top: 18px; padding-top: 16px; border-color: #354550; }
+#where .custom-coordinates summary { color: #d4dfe6; }
+#where .coordinate-grid { margin-top: 14px; }
+#where .small-area-warning { margin-top: 18px; padding-top: 14px; border-top: 1px solid #354550; color: #b9c5ce; line-height: 1.65; }
+#where .apply { background: #253744; border-color: #506472; color: #e1e9ef; }
+#where .next-section { color: #bfced8; }
+#where .map-toolbar { top: 12px; left: 12px; gap: 8px; }
+#where .map-tag { padding: 9px; font-size: 10px; letter-spacing: 0; color: #c4d1da; background: #14212bf2; border-color: #435460; }
+#where .draw { background: #14212bf2; border-color: #607785; color: #e1e9ef; padding: 9px 10px; }
+#where .draw.active { background: #344b5b; border-color: #a3b8c6; color: #f1f5f7; }
+#where .map-caption { left: 12px; right: 12px; bottom: 32px; max-width: none; display: flex; flex-wrap: wrap; gap: 6px 14px; color: #c4d1da; background: #14212bf2; border: 1px solid #435460; line-height: 1.5; }
+#where .map-caption .coverage-key::before, #where .map-caption .selection-key::before { content: ''; display: inline-block; width: 18px; margin-right: 6px; vertical-align: middle; border-top: 2px solid #719b99; }
+#where .map-caption .selection-key::before { border-top: 2px dashed #d0dbe3; }
+#where .map-notice { left: 12px; right: 12px; bottom: 104px; color: #d8e1e7; border-color: #607785; background: #233440f2; }
+#where .maplibregl-ctrl-group { box-shadow: none; border: 1px solid #607785; }
+#where button:focus-visible, #where a:focus-visible, #where input:focus-visible, #where summary:focus-visible { outline: 2px solid #b7c8d4; outline-offset: 3px; }
+#where .presets button:hover, #where .apply:hover, #where .draw:hover { border-color: #b7c8d4; }
+@media(max-width:1199px) and (min-width:801px) { #where .where-grid { grid-template-columns: minmax(0, 1fr) 310px; } }
+@media(max-width:800px) { #where { padding: 18px; } }
+@media(max-width:520px) {
+  #where { padding: 15px 12px; }
+  #where .region-panel { padding: 14px; }
+  #where .map-tag { display: none; }
+  #where .map-caption { font-size: 9px; gap: 5px 10px; }
+}

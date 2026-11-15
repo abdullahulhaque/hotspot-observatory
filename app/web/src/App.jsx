@@ -166,14 +166,16 @@ export default function App() {
           <section className="panel region-panel" aria-label="Current study area">
             <div className="presets" aria-label="Study area presets">{PRESETS.map(([name, values]) => <button key={name} aria-pressed={regionName === name} onClick={() => applyBounds(values)}>{name}</button>)}</div>
             <div className="current-study-area"><h3>Current study area</h3><p className="study-area-name" aria-live="polite">{regionName}</p><p className="historical-record">Historical record: {monthLabel(meta?.start)} - {monthLabel(latestMonth)}</p></div>
-            <details className="custom-coordinates"><summary>Or enter coordinates for a custom bounding box</summary>
+            <p className="coverage-note">The selected rectangle is a geographic bounding box. Analyses include only data within Argentina coverage; surrounding countries are excluded.</p>
+            <details className="custom-coordinates"><summary>Custom coordinates</summary>
+            <p id="coordinate-help" className="coordinate-help">Signed decimal degrees: negative longitude is west; negative latitude is south.</p>
             <form onSubmit={event => { event.preventDefault(); const message = validateBounds(inputs); setFormError(message); if (!message) applyBounds(inputs.map(Number)); }}>
               <div className="coordinate-grid">{[['West longitude', 'W', 0], ['East longitude', 'E', 2], ['South latitude', 'S', 1], ['North latitude', 'N', 3]].map(([label, short, index]) =>
-                <label key={short}>{label}<div className="coordinate-input"><input aria-label={label} type="number" step="any" min={index % 2 ? -90 : -180} max={index % 2 ? 90 : 180} value={inputs[index]} onChange={event => setInputs(previous => previous.map((value, i) => i === index ? event.target.value : value))} required /><span>° {short}</span></div></label>)}</div>
+                <label key={short}>{label}<div className="coordinate-input"><input aria-label={label} aria-describedby="coordinate-help" type="number" step="any" min={index % 2 ? -90 : -180} max={index % 2 ? 90 : 180} value={inputs[index]} onChange={event => setInputs(previous => previous.map((value, i) => i === index ? event.target.value : value))} required /><span aria-hidden="true">°</span></div></label>)}</div>
               {formError && <p className="field-error" role="alert">{formError}</p>}<button className="apply" type="submit">Update study area</button>
             </form>
             </details>
-            <p className="small-area-warning">Small-area estimates are less reliable. Harmonization is calibrated nationally, not independently validated for each selected area.</p>
+            <p className="small-area-warning">Calibration was validated nationally. Regional estimates have not been independently validated; small-area estimates are less reliable.</p>
           </section>
         </div>
         <a className="next-section" href="#satellites">Next: Compare satellite observations</a>

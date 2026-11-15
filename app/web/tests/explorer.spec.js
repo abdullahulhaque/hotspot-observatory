@@ -33,7 +33,7 @@ test('four ordered sections share a region and show file-backed validation', asy
     await expect(page.locator('.calendar-scroll')).toHaveAttribute('aria-busy','false');
     await expect(page.locator('.summary strong')).not.toHaveText(/^(0|—|No data in this area)$/);
   }
-  await page.getByText('Or enter coordinates for a custom bounding box', {exact:true}).click();
+  await page.getByText('Custom coordinates', {exact:true}).click();
   await page.getByLabel('West longitude').fill('0');
   await page.getByLabel('East longitude').fill('1');
   await page.getByLabel('South latitude').fill('0');
@@ -124,7 +124,7 @@ test('map drawing and narrow layout work, validation has missing-file placeholde
   const canvas = page.locator('.maplibregl-canvas');
   await expect(canvas).toBeVisible();
   const previous = await page.getByLabel('West longitude').inputValue();
-  await page.getByRole('button',{name:/Select an area on the map/}).click();
+  await page.getByRole('button',{name:/Select area on map/}).click();
   const rect = await canvas.boundingBox();
   await page.mouse.move(rect.x+rect.width*.3,rect.y+rect.height*.35);
   await page.mouse.down();
@@ -214,11 +214,11 @@ test('study-area introduction, responsive map and metadata dates', async ({page}
   await page.screenshot({path:'test-results/study-area-desktop.png',fullPage:true});
   await page.locator('#where').screenshot({path:'test-results/argentina-map-desktop.png'});
   await page.setViewportSize({width:390,height:844});
-  await expect(page.getByRole('button',{name:'Select an area on the map',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Select area on map',exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.locator('#where').screenshot({path:'test-results/argentina-map-mobile.png'});
   await page.screenshot({path:'test-results/study-area-mobile.png',fullPage:true});
-  await page.getByText('Or enter coordinates for a custom bounding box',{exact:true}).click();
+  await page.getByText('Custom coordinates',{exact:true}).click();
   await expect(page.getByLabel('West longitude')).toBeVisible();
   await expect(page.getByRole('button',{name:'Update study area',exact:true})).toBeVisible();
   await page.getByRole('link',{name:'Next: Compare satellite observations',exact:true}).click();

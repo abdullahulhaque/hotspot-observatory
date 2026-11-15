@@ -26,8 +26,8 @@ export default function Map({ bounds, onSelect, coverage }) {
         // A local style still renders the selection if the optional basemap is offline.
         style: { version: 8, sources: { basemap: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 19,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' } },
-          layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#14232c' } },
-            { id: 'basemap', type: 'raster', source: 'basemap', paint: { 'raster-saturation': -0.5, 'raster-brightness-max': 0.65 } }] },
+          layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#1b2730' } },
+            { id: 'basemap', type: 'raster', source: 'basemap', paint: { 'raster-saturation': -1, 'raster-brightness-max': 0.8, 'raster-fade-duration': 0 } }] },
       });
     } catch {
       setNotice('Map unavailable. Select your region with the latitude / longitude inputs.');
@@ -51,12 +51,14 @@ export default function Map({ bounds, onSelect, coverage }) {
         const mask = { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [world, ...polygons.map(p => p[0])] } };
         instance.addSource('coverage', { type: 'geojson', data: boundary });
         instance.addSource('coverage-mask', { type: 'geojson', data: mask });
-        instance.addLayer({ id: 'outside-coverage', type: 'fill', source: 'coverage-mask', paint: { 'fill-color': '#080f15', 'fill-opacity': .7 } });
-        instance.addLayer({ id: 'coverage-outline', type: 'line', source: 'coverage', paint: { 'line-color': '#82bdb6', 'line-width': 1.7 } });
+        instance.addLayer({ id: 'outside-coverage', type: 'fill', source: 'coverage-mask', paint: { 'fill-color': '#101a22', 'fill-opacity': .78 } });
+        instance.addLayer({ id: 'coverage-outline', type: 'line', source: 'coverage', paint: { 'line-color': '#719b99', 'line-width': 1.5 } });
       }
       instance.addSource('selection', { type: 'geojson', data: polygon(current.current) });
-      instance.addLayer({ id: 'selection-fill', type: 'fill', source: 'selection', paint: { 'fill-color': '#ebd17d', 'fill-opacity': 0.12 } });
-      instance.addLayer({ id: 'selection-outline', type: 'line', source: 'selection', paint: { 'line-color': '#ebd17d', 'line-width': 2, 'line-dasharray': [3, 2] } });
+      // Keep the coverage mask above the highlight so a bounding box never implies
+      // that observations are available in neighbouring countries.
+      instance.addLayer({ id: 'selection-fill', type: 'fill', source: 'selection', paint: { 'fill-color': '#b6c7d4', 'fill-opacity': 0.08 } }, boundary ? 'outside-coverage' : undefined);
+      instance.addLayer({ id: 'selection-outline', type: 'line', source: 'selection', paint: { 'line-color': '#d0dbe3', 'line-width': 1.5, 'line-dasharray': [3, 2] } });
     });
     return () => { resize.disconnect(); map.current = null; instance.remove(); };
   }, []);
@@ -67,7 +69,7 @@ export default function Map({ bounds, onSelect, coverage }) {
     instance.getSource('selection')?.setData(polygon(bounds));
     if (bounds === initialBounds.current) return;
     const [w, s, e, n] = bounds;
-    instance.fitBounds([[w, s], [e < w ? e + 360 : e, n]], { padding: { top: 76, bottom: 76, left: 30, right: 30 }, maxZoom: 8, duration: 600 });
+    instance.fitBounds([[w, s], [e < w ? e + 360 : e, n]], { padding: { top: 76, bottom: 76, left: 30, right: 30 }, maxZoom: 8, duration: 0 });
   }, [bounds]);
 
   useEffect(() => {
@@ -120,10 +122,10 @@ export default function Map({ bounds, onSelect, coverage }) {
 
   return <div className="map-shell">
     <div ref={container} className="map" aria-label="Geographic region selection map" />
-    <div className="map-toolbar"><span className="map-tag"><i /> ARGENTINA COVERAGE</span>
+    <div className="map-toolbar"><span className="map-tag">Argentina coverage</span>
       <button className={drawing ? 'draw active' : 'draw'} onClick={() => setDrawing(value => !value)} aria-pressed={drawing}>
-        <span aria-hidden="true">▧</span> {drawing ? 'Cancel drawing' : 'Select an area on the map'}</button></div>
-    <div className="map-caption">{drawing ? 'Drag to select a rectangle · Esc to cancel' : 'Teal: Argentina coverage · Gold: selected area · Outside coverage dimmed'}</div>
+        <span aria-hidden="true">▧</span> {drawing ? 'Cancel drawing' : 'Select area on map'}</button></div>
+    <div className="map-caption" aria-live="polite">{drawing ? 'Drag to select a rectangle · Esc to cancel' : <><span className="coverage-key">Argentina data coverage</span><span className="selection-key">Selected bounding box</span><span>Outside coverage dimmed</span></>}</div>
     {notice && <div className="map-notice" role="status">{notice}</div>}
   </div>;
 }
