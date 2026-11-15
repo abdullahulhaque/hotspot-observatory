@@ -258,7 +258,10 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
                 scores = payload["scores_test"]
                 metrics = [{"name": f"{period.title()} {label}", "unit": unit,
                             "raw_modis": scores["raw_modis"][period][key],
-                            "harmonized": scores["model_b"][period][key]}
+                            "harmonized": scores["model_b"][period][key],
+                            "model_a": payload.get("scores_by_period", {}).get(
+                                f"{min(payload['test_years'])}-{max(payload['test_years'])}", {}
+                            ).get("model_a", {}).get(period, {}).get(key)}
                            for period in ("monthly", "annual")
                            for key, label, unit in (("MAPE_pct", "MAPE", "%"), ("bias_pct", "bias", "%"), ("R2", "R²", "unitless"))]
                 held_out = ", ".join(map(str, payload["test_years"]))
@@ -273,6 +276,9 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
                 for key in ("raw_modis", "harmonized"):
                     if isinstance(metric[key], bool) or not isinstance(metric[key], (int, float)) or not math.isfinite(metric[key]):
                         raise ValueError(f"{key} must be a finite number")
+                baseline = metric.get("model_a")
+                if baseline is not None and (isinstance(baseline, bool) or not isinstance(baseline, (int, float)) or not math.isfinite(baseline)):
+                    raise ValueError("model_a must be a finite number or null")
             coverage = payload.get("interval_80", {}).get("leave_one_year_out", {}).get("monthly_test_coverage")
             if coverage is not None and (not isinstance(coverage, (int, float)) or not math.isfinite(coverage) or not 0 <= coverage <= 1):
                 raise ValueError("Invalid interval coverage")
@@ -287,7 +293,8 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
                 period_metrics = []
                 for frequency in ("monthly", "annual"):
                     for key, name, unit in (("MAPE_pct", "MAPE", "%"), ("bias_pct", "bias", "%"), ("R2", "R²", "unitless")):
-                        values = {"raw_modis": raw.get(frequency, {}).get(key), "harmonized": report["model_b"].get(frequency, {}).get(key)}
+                        values = {"raw_modis": raw.get(frequency, {}).get(key), "harmonized": report["model_b"].get(frequency, {}).get(key),
+                                  "model_a": report.get("model_a", {}).get(frequency, {}).get(key)}
                         if any(v is not None and (isinstance(v, bool) or not isinstance(v, (float, int)) or not math.isfinite(v)) for v in values.values()):
                             raise ValueError("Period scores must be finite numbers or null")
                         period_metrics.append({"name": f"{frequency.title()} {name}", "unit": unit, **values})
@@ -295,6 +302,7 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
             if not any(report["label"] == overall for report in period_reports):
                 period_reports.append({"label": overall, "note": "All held-out years", "metrics": metrics})
             return {"status": "ready", "metrics": metrics, "held_out": held_out,
+                    "model": payload.get("model", {}), "test_years": payload.get("test_years", []),
                     "periods": period_reports, "known_limitations": payload.get("known_limitations", []),
                     "monthly_interval_coverage": coverage, "nominal_interval_coverage": payload.get("interval_80", {}).get("nominal"),
                     "live_year": payload.get("live_year", {}),

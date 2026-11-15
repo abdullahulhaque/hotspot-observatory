@@ -357,9 +357,10 @@ def test_validation_all_periods_and_limitations_without_invented_raw_scores(tmp_
     def scores(value):
         return {frequency: {'MAPE_pct': value, 'bias_pct': value-1, 'R2': .9} for frequency in ('monthly','annual')}
     payload = {'test_years': [2020,2021,2022,2023,2024,2025],
+               'model': {'train_years': list(range(2012, 2020)), 'form': 'existing calibration'},
                'scores_test': {'raw_modis': scores(60), 'model_b': scores(12)},
                'scores_by_period': {'definition':'held-out only', '2020-2022': {'model_a':scores(20), 'model_b':scores(10)},
-                                    '2023-2025': {'model_b':scores(14)}, '2020-2025': {'model_b':scores(12)}},
+                                    '2023-2025': {'model_b':scores(14)}, '2020-2025': {'model_a':scores(16), 'model_b':scores(12)}},
                'known_limitations':[{'id':'aqua_overpass_drift', 'finding':'Aqua overpass drift since 2023', 'impact':'Model relation can change.'}]}
     path = tmp_path / 'validation.json'
     path.write_text(json.dumps(payload))
@@ -369,4 +370,12 @@ def test_validation_all_periods_and_limitations_without_invented_raw_scores(tmp_
     assert all(m['raw_modis'] is None for m in result['periods'][0]['metrics'])
     assert result['periods'][0]['metrics'][0]['harmonized'] == 10
     assert result['periods'][2]['metrics'][0]['raw_modis'] == 60
+    assert result['metrics'][0]['model_a'] == 16
+    assert result['periods'][0]['metrics'][0]['model_a'] == 20
+    assert result['periods'][1]['metrics'][0]['model_a'] is None
+    assert result['model'] == payload['model']
+    assert result['test_years'] == payload['test_years']
     assert result['known_limitations'] == payload['known_limitations']
+    payload['scores_by_period']['2020-2025']['model_a']['monthly']['MAPE_pct'] = 'invalid'
+    path.write_text(json.dumps(payload))
+    assert TestClient(create_app(FIXTURE, validation_path=path)).get('/validation').json()['status'] == 'invalid'

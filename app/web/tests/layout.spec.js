@@ -38,7 +38,11 @@ test('tablet and mobile stack all sections in order and retain the region select
     }
     await expect(page.locator('.study-area-name')).toHaveText('Gran Chaco');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
-    await page.screenshot({path:`test-results/analytics-layout-${width}.png`,fullPage:true});
+    // The long mobile page exceeds the software renderer's full-image limit.
+    // Capture each section while retaining all page geometry assertions above.
+    if (width <= 600) {
+      for (const id of ['where','satellites','history','explore']) await page.locator(`#${id}`).screenshot({path:`test-results/analytics-layout-${width}-${id}.png`});
+    } else await page.screenshot({path:`test-results/analytics-layout-${width}.png`,fullPage:true});
   }
 });
 

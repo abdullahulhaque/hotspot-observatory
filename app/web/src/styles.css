@@ -213,3 +213,57 @@ html { scroll-padding-top: var(--header-height); }
   #satellites .sensor-overview-card dl { grid-template-rows: 48px auto 48px auto; }
   #satellites .raw-chart-card { padding: 14px 10px; }
 }
+
+/* Section 03: measured validation, historical comparison and research notes. */
+#history > .page-section-heading p { width: 100%; margin-left: 0; font-size: 13px; line-height: 1.65; }
+#history .page-section-heading h2 { letter-spacing: 0; font-size: 21px; }
+#history .method-panel { margin: 0; padding: 0; border: 0; }
+#history .validation-heading h3 { font-size: 15px; }
+#history .validation-periods { margin-top: 10px; font-size: 12px; color: #aabcc8; line-height: 1.7; }
+#history .validation-periods strong { color: #d4dfe6; font-weight: 500; }
+#history .validation-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 14px; }
+#history .validation-metric { padding: 18px; background: #14212b; border: 1px solid #354550; border-radius: 5px; }
+#history h4 { margin: 0; color: #c4d1da; font-size: 12px; font-weight: 500; line-height: 1.6; }
+#history .validation-metric > strong { display: block; color: #e1e9ef; font: 500 29px 'Space Grotesk', sans-serif; margin: 10px 0 5px; }
+#history .validation-metric > span { color: #aabcc8; font-size: 11px; }
+#history .baseline-comparison, #history .validation-reference { margin-top: 12px; font-size: 12px; line-height: 1.7; color: #b4c5ce; }
+#history .baseline-comparison strong { color: #e1e9ef; font-weight: 500; }
+#history .validation-table caption { text-align: left; color: #c4d1da; padding: 12px 0 8px; font-size: 12px; }
+#history .compact-scores th, #history .compact-scores td { padding: 9px 10px; }
+#history .validation-details { margin-top: 14px; }
+#history .validation-details > dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px; background: #14212b; }
+#history .validation-details > dl dd { margin: 5px 0; overflow-wrap: anywhere; }
+#history .validation-details > dl ul { display: flex; flex-wrap: wrap; list-style: none; padding: 0; gap: 8px; }
+#history .why-panel { margin-top: 20px; padding: 18px 0; border-top: 1px solid #354550; border-bottom: 1px solid #354550; }
+#history .why-panel > h3 { font-size: 15px; margin-bottom: 8px; }
+#history .annual-chart text { font-size: 11px; }
+#history .annual-chart .annual-incomplete { fill: #f0bd9b; font-weight: 700; }
+#history .annual-point:focus-visible { outline: 1px solid #d4dfe6; outline-offset: 4px; }
+#history .annual-point:hover { stroke: #e1e9ef; stroke-width: 1px; }
+#history .annual-provenance-key { color: #b4c5ce; font-size: 11px; line-height: 1.7; margin: 8px 0; }
+#history .annual-details, #history .monthly-interval-details { color: #b4c5ce; font-size: 11px; margin-top: 10px; }
+#history summary { cursor: pointer; line-height: 1.6; }
+#history .monthly-interval-details .validation-table { max-height: 340px; overflow: auto; }
+#history .annual-details td:last-child { text-align: left; max-width: 500px; white-space: normal; line-height: 1.6; }
+#history .scientific-method { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+#history .scientific-method > div { border: 1px solid #354550; border-radius: 5px; padding: 14px; background: #14212b; }
+#history .scientific-method h4 { color: #d4dfe6; font-size: 12px; }
+#history .scientific-method p { color: #b4c5ce; font-size: 11px; line-height: 1.75; margin-top: 8px; }
+#history .known-limitations { margin-top: 20px; }
+#history .known-limitations h3 { font-size: 15px; }
+#history .limitations-summary { padding-left: 18px; margin: 12px 0; color: #b4c5ce; font-size: 12px; line-height: 1.7; }
+#history .limitations-summary li { margin: 6px 0; }
+#history .drift-notice { background: #14212b; color: #c4d1da; border-left-color: #7b929f; }
+#history .limitation-list { gap: 10px 20px; font-size: 11px; }
+#history .night-note { color: #b4c5ce; }
+#history summary:focus-visible { outline: 2px solid #b7c8d4; outline-offset: 3px; }
+@media(max-width:1000px) { #history .scientific-method { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media(max-width:600px) {
+  #history .page-section-heading h2 { font-size: 19px; }
+  #history .validation-summary, #history .scientific-method { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  #history .validation-metric { padding: 14px; }
+  #history .validation-details > dl { grid-template-columns: minmax(0, 1fr); }
+  #history .compact-scores table { min-width: 0; table-layout: fixed; }
+  #history .compact-scores th, #history .compact-scores td { padding: 8px 4px; font-size: 10px; }
+  #history .compact-scores tbody th { white-space: nowrap; }
+}

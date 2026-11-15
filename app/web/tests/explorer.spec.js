@@ -9,17 +9,17 @@ test('four ordered sections share a region and show file-backed validation', asy
   const validation = await (await request.get('/api/validation')).json();
   await page.goto('/');
   await expect(page.locator('main .page-section')).toHaveCount(4);
-  await expect(page.locator('.page-section-heading h2')).toHaveText(['Choose your study area.','Compare the Satellites','Understand Harmonization','Explore Fire History']);
+  await expect(page.locator('.page-section-heading h2')).toHaveText(['Choose your study area.','Compare the Satellites','Making satellite observations comparable','Explore Fire History']);
   await expect(page.locator('.synthetic-banner')).toHaveCount(meta.synthetic ? 1 : 0);
   await expect(page.getByLabel('End month')).toHaveValue(meta.end);
   await expect(page.getByText('MODIS and VIIRS observe the same burning activity with different detection capabilities. Their raw hotspot measurements cannot be compared directly without accounting for these differences.', { exact:true })).toBeVisible();
   await expect(page.locator('.raw-chart')).toHaveCount(2);
-  await expect(page.locator('#history .annual-join')).toContainText('2012: artificial sensor jump');
+  await expect(page.locator('#history .annual-join')).toContainText('2012: instrument transition');
   await expect(page.locator('.compact-scores tbody tr')).toHaveCount(validation.periods.length);
   for (const period of validation.periods) await expect(page.locator('.compact-scores tbody')).toContainText(period.label);
   await expect(page.locator('.drift-notice')).toContainText('Aqua overpass drift since 2023');
   await expect(page.locator('.limitation-list details')).toHaveCount(validation.known_limitations.length);
-  await expect(page.locator('.night-note')).toHaveText('Night activity is VIIRS-only from 2012; it is not back-cast.');
+  await expect(page.locator('.night-note')).toHaveText('Harmonized nighttime activity uses VIIRS only from 2012; it is not back-cast.');
   await page.screenshot({ path:'test-results/four-sections-desktop.png', fullPage:true });
   for (const [name, bbox] of [['Gran Chaco','-64,-28,-59,-24'], ['Pampas','-64,-38,-59,-33'], ['Patagonia','-71,-50,-67,-40']]) {
     const loaded = page.waitForResponse(r => r.url().includes('/area-summary?') && new URL(r.url()).searchParams.get('bbox') === bbox);
@@ -135,7 +135,7 @@ test('map drawing and narrow layout work, validation has missing-file placeholde
   await page.setViewportSize({width:390,height:844});
   await expect(page.getByRole('heading',{name:'Explore Fire History',exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
-  await page.screenshot({path:'test-results/four-sections-mobile.png',fullPage:true});
+  for (const id of ['where','satellites','history','explore']) await page.locator(`#${id}`).screenshot({path:`test-results/four-sections-mobile-${id}.png`});
 });
 
 
@@ -217,7 +217,8 @@ test('study-area introduction, responsive map and metadata dates', async ({page}
   await expect(page.getByRole('button',{name:'Select area on map',exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.locator('#where').screenshot({path:'test-results/argentina-map-mobile.png'});
-  await page.screenshot({path:'test-results/study-area-mobile.png',fullPage:true});
+  // Section 01 is captured above; avoid an oversized full-page software-renderer image.
+  await page.screenshot({path:'test-results/study-area-mobile.png'});
   await page.getByText('Custom coordinates',{exact:true}).click();
   await expect(page.getByLabel('West longitude')).toBeVisible();
   await expect(page.getByRole('button',{name:'Update study area',exact:true})).toBeVisible();

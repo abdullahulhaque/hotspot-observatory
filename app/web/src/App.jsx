@@ -181,9 +181,10 @@ export default function App() {
       </section>
       </div>
       <section id="history" className="page-section compact-section" aria-labelledby="history-title">
-        <div className="page-section-heading"><span>03</span><h2 id="history-title">Understand Harmonization</h2><p>A consistent scale across the sensor change.</p></div>
-        <WhyHarmonize data={area} loading={areaLoading} error={areaError} compact />
-        <MethodPanel validation={validation} calibration={meta?.calibration}/>
+        <div className="page-section-heading"><span>03</span><h2 id="history-title">Making satellite observations comparable</h2><p>We calibrate MODIS observations against VIIRS using overlapping years, then test the correction on observations excluded from model training.</p></div>
+        <MethodPanel validation={validation} calibration={meta?.calibration}>
+          <WhyHarmonize data={area} loading={areaLoading} error={areaError} monthly={daytime} monthlyLoading={dayLoading} monthlyError={dayError} regionName={regionName} compact />
+        </MethodPanel>
       </section>
       <section id="explore" className="page-section explore-section" aria-labelledby="explore-title">
         <div className="page-section-heading"><span>04</span><h2 id="explore-title">Explore Fire History</h2><p>Select a month to inspect its harmonized history.</p></div>
