@@ -90,14 +90,23 @@ The page has four sections on one document scroll, with a single shared region:
 
 1. Select a Region: the map, coordinates and presets.
 2. Compare the Satellites: separate monthly raw MODIS and raw VIIRS charts,
-   always daytime and full-record. They share the y-axis maximum and pointer
-   hover month; a keyboard slider controls both. Sensor history is distinguished
-   from the dates actually present in this Argentina dataset.
-3. Understand Harmonization: the full-width annual daytime naive-splice comparison,
-   validation by every reported period, and known limitations. National model
-   validation is labelled as national and does not change with the region.
+   defaulting to the overlapping record from 2012, with full MODIS history and
+   day/night options. They share date ranges, the y-axis maximum and hover month;
+   a keyboard slider controls both. The selected-month panel compares actual
+   raw values and withholds invalid differences/ratios.
+3. Understand Harmonization: metadata-driven raw/baseline/Model B error bars,
+   saved held-out predictions versus VIIRS, visible limitations, expandable
+   technical details, then the annual naive-splice versus harmonized chart.
+   National validation is labelled as national and does not change with the region.
 4. Explore Fire History: date/acquisition controls, calendar and harmonized anomaly side by
    side, followed by rankings, peak month and CSV export.
+
+The existing `/validation` response includes `prediction_series`, read from
+`out/task2/predictions_monthly.csv`. It returns only the metadata's held-out
+years, preserving incomplete and gap-flagged months as excluded observations.
+The saved predictions must reproduce the reported monthly raw and Model B
+MAPE; missing, malformed or inconsistent artifacts show an unavailable state.
+No model is refitted and the harmonized splice is never substituted for predictions.
 
 Harmonized heatmap cells use dots for back-casts, diamonds for gap-fills and
 triangles for gaps. Raw view hides model-source markers. Hatching indicates

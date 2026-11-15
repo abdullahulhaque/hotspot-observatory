@@ -1,4 +1,132 @@
-# Argentina hot-spot series: MODIS Aqua harmonized to VIIRS S-NPP
+# Hotspot Observatory
+
+Hotspot Observatory is a NASA Space Apps Challenge 2026 application for exploring
+satellite-detected burning activity across Argentina. Its single-page workspace
+has four sections sharing one study area: **Study Area**, **Compare Satellites**,
+**Harmonization and Scientific Validation**, and **Explore Fire History**.
+
+## Quick start for collaborators
+
+Prerequisites: Git, **Python 3.12**, and **Node.js 22.11+ with npm**. The commands
+below use a macOS/Linux shell. Access to the private GitHub repository is required.
+
+```sh
+git clone https://github.com/abdullahulhaque/hotspot-observatory.git
+cd hotspot-observatory
+python3.12 -m venv app/.venv
+app/.venv/bin/python -m pip install -r app/api/requirements.txt
+npm --prefix app/web ci
+```
+
+Start the backend from the repository root:
+
+```sh
+DATA_PATH=out/harmonized.parquet app/.venv/bin/python -m uvicorn app.api.main:app --host 127.0.0.1 --port 8000
+```
+
+In a second terminal, from the repository root:
+
+```sh
+npm --prefix app/web run dev
+```
+
+Open **http://127.0.0.1:5173**. FastAPI documentation is at
+http://127.0.0.1:8000/docs. Vite forwards `/api/*` to FastAPI on port 8000.
+Check the connection and real-data metadata with:
+
+```sh
+curl --fail http://127.0.0.1:8000/meta
+curl --fail http://127.0.0.1:5173/api/validation
+```
+
+`/meta` should report `synthetic: false`, country Argentina, and latest complete
+month `2026-10` for the committed snapshot. No FIRMS key or raw downloads are
+needed to run the app. The real processed datasets are included in this repository.
+The API fails explicitly when production data is missing or invalid; it never
+silently substitutes the synthetic fixture. To update an existing checkout,
+save local work first, then use `git pull --ff-only origin main`.
+
+## Technology and repository structure
+
+- Frontend: React 19, Vite 6, MapLibre GL, SVG charts, and plain CSS.
+- Backend: Python, FastAPI, Uvicorn, and PyArrow for read-only Parquet aggregation.
+- Scientific pipeline: pandas, NumPy, PyArrow, Matplotlib, and tabulate.
+- Tests: pytest/FastAPI TestClient, Node's test runner, and Playwright/Chromium.
+
+```text
+app/api/       Read-only API and backend tests
+app/web/       Four-section frontend, lockfile and browser/unit tests
+contracts/     Scientific data schema and provenance contract
+fixtures/      Argentina map geometry and explicitly synthetic development fixture
+pipeline/      Scientific calibration, diagnostics and harmonization scripts
+out/           Versioned NASA-derived processed data and scientific results
+out/task2/     Calibration reports and saved held-out predictions
+get_rest.sh    Download yearly FIRMS country archives (optional regeneration)
+```
+
+## Configuration
+
+No environment variables are required for the default local app setup.
+Optional variables are listed here without credential values:
+
+| Variable | Purpose |
+|---|---|
+| `DATA_PATH` | Override the API activity dataset; defaults to the repository's real `out/harmonized.parquet`. |
+| `API_URL` | Override Vite's development API proxy target. |
+| `VITE_API_BASE` | API base URL embedded at frontend build time; otherwise the frontend uses `/api`. A separate-origin API requires suitable proxy/CORS configuration. |
+| `FIRMS_MAP_KEY` | Required only when fetching or refreshing NASA FIRMS data, not for running the committed app. |
+
+Keep credentials in the local environment or ignored `.env` files. Never commit
+keys, raw responses, virtual environments, dependency directories or build outputs.
+The frontend needs network access for its basemap tiles and attribution sources;
+data aggregation itself uses the local processed files.
+
+## Processed data distribution
+
+Keep these files together when cloning, packaging or deploying the application:
+
+| Required asset | Purpose | Approximate size |
+|---|---|---:|
+| `out/harmonized.parquet` | Real cell-level activity, source and quality flags | 1.7 MB |
+| `out/national_monthly.parquet` | National monthly series and modelled-month intervals | 11 KB |
+| `out/validation.json` | Validation scores, model metadata and limitations | 45 KB |
+| `out/task2/predictions_monthly.csv` | Saved national Model B predictions and held-out VIIRS observations | 17 KB |
+| `fixtures/argentina.geojson` | Application coverage boundary | 3 KB |
+
+These lightweight processed assets are stored in ordinary Git. Git LFS is not
+needed for this snapshot. Raw NASA CSVs, ZIP downloads and FIRMS response caches
+are excluded; processed CSV summaries in `out/` are intentionally retained.
+Do not add a blanket `*.parquet` or `*.csv` ignore rule. If future processed
+files grow large, establish Git LFS or a versioned, checksummed download before
+committing them. The scientific regeneration commands below are optional for
+app users and overwrite derived outputs only when explicitly run.
+
+## Tests and production build
+
+Run from the repository root after installation:
+
+```sh
+app/.venv/bin/python -m pytest app/api -q
+npm --prefix app/web run test:unit
+npm --prefix app/web run build
+npm --prefix app/web run test:install
+npm --prefix app/web run test:e2e
+```
+
+Playwright starts the local API and Vite servers if ports 8000/5173 are free;
+otherwise it reuses running servers. Use the real dataset for integration tests.
+On a minimal Linux host, install Chromium system dependencies if requested:
+`cd app/web && npx playwright install-deps chromium` (may require sudo).
+`test:install` stores Chromium in the ignored `app/web/.playwright/` directory.
+The production build is generated in ignored `app/web/dist/`. Deployment must
+serve it with a reverse proxy forwarding `/api/*` to FastAPI and stripping `/api`.
+
+Current checks: 66 backend tests, 14 frontend unit tests and 24 end-to-end tests.
+Existing non-blocking warnings concern the frontend bundle size and a
+Starlette/httpx TestClient deprecation. See [application details](app/README.md)
+for endpoint behavior, quality flags, exports and development fixtures.
+
+## Scientific overview
 
 This project builds one consistent monthly record of satellite fire hot-spot
 activity over Argentina from **2003-01 to 2026-10**.
@@ -168,6 +296,20 @@ band (−5.3% / +5.0%).
 ## Limitations
 
 These are listed under `known_limitations` in `out/validation.json`.
+
+- **National validation only.** Held-out scores measure national monthly
+  agreement with VIIRS, not independent wildfire ground truth or the accuracy
+  of arbitrary regional selections. Regional interval scaling is not
+  independently validated.
+- **Measured interval coverage.** The nominal 80% monthly prediction interval
+  covered about 70.15% of held-out months. It undercovers; monthly intervals
+  must not be added into an annual confidence band.
+- **Recent-period performance.** Model B monthly MAPE increased from 10.16%
+  in 2020–2022 to 14.56% in 2023–2025. Timing drift and version changes coincide
+  with this deterioration; the diagnostics do not establish a causal attribution.
+- **Missing observations.** March, April and June 2026 have confirmed missing
+  S-NPP days; July 2026 is a modelled gap fill. The app labels incomplete,
+  estimated and provisional observations and withholds misleading comparisons.
 
 - **Aqua overpass drift (`aqua_overpass_drift`).** Aqua's median daytime
   overpass holds at about 13:52–13:57 local solar time through 2022, then moves
