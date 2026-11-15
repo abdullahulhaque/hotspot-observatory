@@ -195,13 +195,14 @@ test('study-area introduction, responsive map and metadata dates', async ({page}
   await expect(page.locator('.brand')).toContainText('HOTSPOT OBSERVATORY');
   await expect(page.locator('.brand small')).toHaveText('Harmonized satellite fire history');
   await expect(page.locator('header')).not.toContainText('Selected area');
-  await expect(page.getByRole('heading',{level:1})).toHaveText('Two satellites. One clearer fire history.');
-  await expect(page.locator('.hero-subhead')).toHaveText("MODIS and VIIRS have observed Earth's fires for decades, but their measurements aren't directly comparable. Hotspot Observatory bridges those differences to reveal historical burning patterns across Argentina from 2003 to 2026.");
+  await expect(page.getByRole('heading',{level:1})).toHaveText('Harmonized fire activity from MODIS and VIIRS');
+  await expect(page.locator('.hero-subhead')).toHaveText("Explore decades of satellite-detected fire activity through a unified historical record. Compare burning patterns across regions, seasons, and years, identify unusual activity, and investigate long-term trends using NASA observations calibrated for differences between satellite instruments.");
+  await expect(page.locator('.hero-note')).toHaveText('Current coverage: Argentina, 2003–2026 · More regions planned');
   await expect(page.locator('.measurement-explanation p')).not.toBeVisible();
-  await page.getByText('How is activity measured?', {exact:true}).click();
+  await page.getByText('Data and methods', {exact:true}).click();
   await expect(page.locator('.measurement-explanation p')).toContainText('0.1° geographic grid cells');
   await expect(page.locator('.measurement-explanation p')).toContainText('The same cell can count again on another day.');
-  await page.getByText('How is activity measured?', {exact:true}).click();
+  await page.getByText('Data and methods', {exact:true}).click();
   await expect(page.locator('.section-nav a')).toHaveText(['01 Select a study area','02 Compare satellites','03 Understand harmonization','04 Explore fire history']);
   await expect(page.locator('#where .page-section-heading p')).toHaveText('Select a region or define your own area to explore NASA satellite observations.');
   await expect(page.locator('.presets button')).toHaveText(['All Argentina','Gran Chaco','Pampas','Patagonia']);
@@ -225,9 +226,10 @@ test('study-area introduction, responsive map and metadata dates', async ({page}
   // The record follows metadata, not the machine clock or fixed hero copy.
   await page.route('**/api/meta', async route => {
     const response=await route.fetch();
-    await route.fulfill({json:{...await response.json(), latest_complete_month:'2026-09'}});
+    await route.fulfill({json:{...await response.json(), latest_complete_month:'2025-09'}});
   });
   await page.reload();
-  await expect(page.locator('.historical-record')).toHaveText('Historical record: January 2003 - September 2026');
-  await expect(page.getByLabel('End month')).toHaveValue('2026-09');
+  await expect(page.locator('.historical-record')).toHaveText('Historical record: January 2003 - September 2025');
+  await expect(page.getByLabel('End month')).toHaveValue('2025-09');
+  await expect(page.locator('.hero-note')).toHaveText('Current coverage: Argentina, 2003–2025 · More regions planned');
 });
