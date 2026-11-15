@@ -2,6 +2,9 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  // One worker: every test drives the same local API, whose real-data aggregations
+  // time out when several browsers query it at once.
+  workers: 1,
   use: {
     baseURL: 'http://127.0.0.1:5173', viewport: { width: 1440, height: 1100 },
     // Software rendering keeps MapLibre tests independent of the host GPU.

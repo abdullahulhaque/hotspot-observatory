@@ -1,16 +1,18 @@
 import { test, expect } from '@playwright/test';
+import { openTab, openView } from './helpers.js';
 import { readFile } from 'node:fs/promises';
 import { parseCsv } from '../src/exportCsv.js';
 const fmt = value => value == null ? '—' : value.toLocaleString('en', { maximumFractionDigits: 1 });
 
 test('presets and custom coordinates propagate identical geography through every analysis and export', async ({ page, request }) => {
-  test.setTimeout(90000);
+  test.setTimeout(150000);
   const meta = await (await request.get('/api/meta')).json();
   expect(meta.synthetic).toBe(false);
   expect(meta.latest_complete_month).toBe('2026-10');
-  await page.goto('/');
+  await page.goto('/?view=validation');
   await expect(page.locator('.validation-metric > strong').first()).not.toHaveText('—');
   const nationalScores = await page.locator('.validation-metric > strong').allTextContents();
+  await openView(page, 'Explore');
   const regions = [
     ['Gran Chaco', '-64,-28,-59,-24'], ['Pampas', '-64,-38,-59,-33'],
     ['Patagonia', '-71,-50,-67,-40'], ['Custom area', '-63,-27,-61,-25'],
@@ -35,6 +37,7 @@ test('presets and custom coordinates propagate identical geography through every
     } else await page.getByRole('button', { name, exact: true }).click();
     await expect(page.locator('.study-area-name')).toHaveText(name);
     await expect(page.locator('.calendar-scroll')).toHaveAttribute('aria-busy', 'false');
+    await openTab(page, 'Raw sensors');
     await expect(page.locator('.raw-chart')).toHaveCount(2);
     const slider = page.getByLabel('Inspect satellite month');
     await slider.focus(); await page.keyboard.press('End');
@@ -45,12 +48,16 @@ test('presets and custom coordinates propagate identical geography through every
     await expect(page.locator('.observation-comparison [data-metric=raw_viirs]')).toHaveText(fmt(latest.raw_viirs));
     const max = Math.max(...series.data.filter(r => r.year >= 2012).flatMap(r => [r.raw_modis ?? 0, r.raw_viirs ?? 0]));
     for (const chart of await page.locator('.raw-chart').all()) await expect(chart).toHaveAttribute('data-y-max', String(max));
+    await openTab(page, 'Annual record');
     await expect(page.locator('#history .why-panel > .muted')).toContainText(name);
-    await expect(page.locator('.validation-metric > strong')).toHaveText(nationalScores);
     const year = area.annual_daytime.find(row => row.year === 2025);
     const point = page.locator('.annual-point[data-series=harmonized][data-year="2025"]');
     await expect(point).toHaveAccessibleName(new RegExp(`Harmonized: ${fmt(year.harmonized).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} active cell-days`));
     await expect(page.locator('.summary strong')).toHaveText(fmt(series.data.reduce((sum, row) => sum + (row.harmonized ?? 0), 0)));
+    await openView(page, 'Validation');
+    await expect(page.locator('.validation-metric > strong')).toHaveText(nationalScores);
+    await openView(page, 'Explore');
+    await openTab(page, 'Calendar');
     const october = page.getByRole('button', { name: /^Oct 2026:/ });
     await expect(october).toHaveAttribute('title', `Oct 2026 · ${fmt(latest.harmonized)} active cell-days · Observed VIIRS · Complete observation coverage · NRT · provisional`);
     await october.click();
@@ -59,13 +66,13 @@ test('presets and custom coordinates propagate identical geography through every
     await expect(page.locator('.comparison strong').first()).toHaveText(fmt(stats.value));
     await expect(page.locator('.comparison strong').nth(1)).toHaveText(fmt(stats.historical_median));
     await expect(page.locator('.anomaly-rank')).toContainText(`${stats.rank} of ${stats.rank_count}`);
-    await page.getByRole('button', { name: 'Compare seasons', exact: true }).click();
+    await openTab(page, 'Seasons');
     const spring = series.data.filter(row => row.year === 2025 && [9, 10, 11].includes(row.month));
     expect(spring).toHaveLength(3);
     expect(spring.every(row => !row.incomplete)).toBe(true);
     await expect(page.locator('.season-panel > .muted')).toContainText(name);
     await expect(page.locator('[data-season="spring-2025"]')).toHaveAttribute('data-total', String(spring.reduce((sum, row) => sum + row.harmonized, 0)));
-    await page.getByRole('button', { name: 'Fire calendar', exact: true }).click();
+    await openTab(page, 'Calendar');
     await page.getByLabel('Start month').fill('2025-09');
     await page.getByLabel('End month').fill('2025-11');
     await expect(page.locator('.calendar-scroll')).toHaveAttribute('aria-busy', 'false');

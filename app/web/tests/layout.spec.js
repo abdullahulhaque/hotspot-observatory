@@ -1,96 +1,84 @@
 import { test, expect } from '@playwright/test';
+import { openTab, openView } from './helpers.js';
+const noHorizontalScroll = page => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
 
-async function expectFullWidthSections(page) {
-  const sections = page.locator('main > section.page-section');
-  await expect(sections).toHaveCount(4);
-  const boxes = await Promise.all(['where','satellites','history','explore'].map(id=>page.locator(`#${id}`).boundingBox()));
-  for (let i=1;i<boxes.length;i++) {
-    expect(boxes[i].y - boxes[i-1].y - boxes[i-1].height).toBeCloseTo(24, 0);
-    expect(boxes[i].x).toBeCloseTo(boxes[0].x, 0);
-    expect(boxes[i].width).toBeCloseTo(boxes[0].width, 0);
-  }
-  const paddings = await sections.evaluateAll(elements=>elements.map(el=>getComputedStyle(el).padding));
-  expect(new Set(paddings).size).toBe(1);
-}
-
-test('desktop sections are full width, study area is 65/35, and sensor panels are balanced', async ({page}) => {
+test('desktop workspace keeps controls, map stage and inspector in one viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
-  await expect(page.locator('.raw-chart')).toHaveCount(2);
-  await expectFullWidthSections(page);
-  const map = await page.locator('#where .map-container').boundingBox();
-  const controls = await page.locator('#where .region-panel').boundingBox();
-  expect(map.y).toBeCloseTo(controls.y, 0);
-  expect(map.width / (map.width + controls.width)).toBeCloseTo(.65, 2);
-  expect(controls.x).toBeGreaterThan(map.x + map.width);
-  for (const selector of ['.raw-chart-card']) {
-    const cards = page.locator(`#satellites ${selector}`);
-    const [modis, viirs] = await Promise.all([cards.nth(0).boundingBox(), cards.nth(1).boundingBox()]);
-    expect(modis.y).toBeCloseTo(viirs.y, 0);
-    expect(modis.width).toBeCloseTo(viirs.width, 0);
-    expect(viirs.x).toBeGreaterThan(modis.x + modis.width);
-    expect(modis.width).toBeGreaterThan(500);
-  }
-  const current = page.locator('.section-nav [aria-current="location"]');
-  await expect(current).toHaveText('Study Area');
-  await page.getByRole('link',{name:'Compare Sensors',exact:true}).click();
-  await expect(current).toHaveText('Compare Sensors');
-  await page.getByRole('link',{name:'Study Area',exact:true}).click();
-  await expect(current).toHaveText('Study Area');
-  await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
-  await page.screenshot({path:'test-results/analytics-layout-desktop.png',fullPage:true});
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+  await expect(page.locator('.timeline-track')).toBeVisible();
+  const [controls, stage, inspector] = await Promise.all(['.controls', '.stage', '.inspector'].map(s => page.locator(s).boundingBox()));
+  expect(controls.y).toBeCloseTo(stage.y, 0);
+  expect(inspector.y).toBeCloseTo(stage.y, 0);
+  expect(stage.x).toBeGreaterThanOrEqual(controls.x + controls.width - 0.5);
+  expect(inspector.x).toBeGreaterThanOrEqual(stage.x + stage.width - 0.5);
+  // The application fills the viewport; columns scroll internally instead of the page.
+  expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1)).toBe(true);
+  expect(await page.locator('.stage').evaluate(el => getComputedStyle(el).overflowY)).toBe('auto');
+  const map = await page.locator('.map-container').boundingBox();
+  expect(map.height).toBeGreaterThan(300);
+  expect(await noHorizontalScroll(page)).toBe(true);
+  await page.screenshot({ path: 'test-results/workspace-1440.png' });
 });
 
-test('tablet and mobile stack all sections in order and retain the region selection', async ({page}) => {
+test('tablet and phone widths stack the workspace and retain the study area', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button',{name:'Gran Chaco',exact:true}).click();
-  for (const width of [1024, 820, 390, 320]) {
-    await page.setViewportSize({width,height:1000});
-    await expect(page.locator('.calendar-scroll')).toHaveAttribute('aria-busy','false');
-    await expectFullWidthSections(page);
-    const map = await page.locator('#where .map-container').boundingBox();
-    const controls = await page.locator('#where .region-panel').boundingBox();
+  await page.getByRole('button', { name: 'Gran Chaco', exact: true }).click();
+  for (const width of [1100, 820, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect(page.locator('.calendar-scroll')).toHaveAttribute('aria-busy', 'false');
+    const [controls, stage, inspector] = await Promise.all(['.controls', '.stage', '.inspector'].map(s => page.locator(s).boundingBox()));
     if (width > 900) {
-      expect(map.y).toBeCloseTo(controls.y, 0);
-      expect(map.width / (map.width + controls.width)).toBeCloseTo(.65, 2);
+      expect(stage.x).toBeGreaterThanOrEqual(controls.x + controls.width - 0.5);
+      expect(inspector.y).toBeGreaterThanOrEqual(stage.y + stage.height - 0.5);
     } else {
-      expect(controls.y).toBeGreaterThan(map.y + map.height);
-      expect(controls.x).toBeCloseTo(map.x, 0);
-      expect(controls.width).toBeCloseTo(map.width, 0);
+      expect(inspector.y).toBeGreaterThanOrEqual(stage.y + stage.height - 0.5);
+      expect(controls.y).toBeGreaterThanOrEqual(inspector.y + inspector.height - 0.5);
+      expect(controls.x).toBeCloseTo(stage.x, 0);
     }
     await expect(page.locator('.study-area-name')).toHaveText('Gran Chaco');
-    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
-    // The long mobile page exceeds the software renderer's full-image limit.
-    // Capture each section while retaining all page geometry assertions above.
-    if (width <= 600) {
-      for (const id of ['where','satellites','history','explore']) {
-        const section = page.locator(`#${id}`);
-        // Keep the sticky header above the section instead of across the capture.
-        await section.evaluate(el=>window.scrollTo({top:window.scrollY+el.getBoundingClientRect().top-document.querySelector('.topbar').getBoundingClientRect().height-16,behavior:'instant'}));
-        await section.screenshot({path:`test-results/analytics-layout-${width}-${id}.png`});
-      }
-    } else await page.screenshot({path:`test-results/analytics-layout-${width}.png`,fullPage:true});
+    expect(await noHorizontalScroll(page)).toBe(true);
+    expect(await page.getByRole('tablist', { name: 'Views' }).evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/workspace-${width}.png` });
   }
 });
 
-test('sticky header navigation is reachable and leaves anchor headings visible at every width', async ({page}) => {
+test('tabs, timeline and deep links are keyboard operable and reproducible', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.topbar .section-nav a')).toHaveText(['Study Area','Compare Sensors','Harmonization','Fire History']);
-  await expect(page.locator('main .section-nav')).toHaveCount(0);
-  await expect(page.locator('.topbar .section-nav [aria-current="location"]')).toHaveText('Study Area');
-  await expect(page.locator('.raw-chart')).toHaveCount(2);
-  for (const width of [1440, 820, 390, 320]) {
-    await page.setViewportSize({width,height:1000});
-    expect(await page.locator('.topbar .section-nav').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
-    for (const [name,id] of [['Harmonization','history'],['Fire History','explore'],['Study Area','where'],['Compare Sensors','satellites']]) {
-      await page.getByRole('link',{name,exact:true}).click();
-      await expect(page.locator('.topbar .section-nav [aria-current="location"]')).toHaveText(name);
-      await expect.poll(()=>page.locator(`#${id}`).evaluate(el=>Math.abs(el.getBoundingClientRect().top-document.querySelector('.topbar').getBoundingClientRect().bottom-16))).toBeLessThan(3);
-      expect(Math.abs((await page.locator('.topbar').boundingBox()).y)).toBeLessThan(1);
-    }
-    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
-    await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
-    await expect(page.locator('.topbar .section-nav [aria-current="location"]')).toHaveText('Study Area');
-    await page.screenshot({path:`test-results/sticky-header-${width}.png`});
-  }
+  const views = page.getByRole('tablist', { name: 'Views' });
+  await expect(views.getByRole('tab', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
+  await views.getByRole('tab', { name: 'Explore' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(views.getByRole('tab', { name: 'Validation' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/view=validation/);
+  await openView(page, 'Explore');
+  await openTab(page, 'Seasons');
+  await expect(page).toHaveURL(/tab=seasons/);
+  // Timeline: arrows step one month, Page Down one year, Home the first month.
+  const slider = page.getByRole('slider', { name: 'Selected month' });
+  await expect(page.locator('.month-pill')).toHaveText('2026-10');
+  await slider.focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('.month-pill')).toHaveText('2026-09');
+  await page.keyboard.press('PageDown');
+  await expect(page.locator('.month-pill')).toHaveText('2025-09');
+  await expect(page).toHaveURL(/month=2025-09/);
+  await page.getByRole('button', { name: 'Next month' }).click();
+  await expect(page.locator('.month-pill')).toHaveText('2025-10');
+  await slider.focus();
+  await page.keyboard.press('Home');
+  await expect(page.locator('.month-pill')).toHaveText('2003-01');
+  // A shared link restores area, analysis tab, month, acquisition and series.
+  await page.goto('/?view=explore&tab=trend&bbox=-64,-28,-59,-24&month=2024-08&period=N&series=raw_viirs');
+  await expect(page.locator('.study-area-name')).toHaveText('Gran Chaco');
+  await expect(page.getByRole('tablist', { name: 'Analyses' }).getByRole('tab', { name: 'Timing & trend' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.month-pill')).toHaveText('2024-08');
+  await expect(page.getByLabel('Day or night')).toHaveValue('N');
+  await expect(page.getByRole('button', { name: 'Raw', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('Raw sensor')).toHaveValue('raw_viirs');
+  await expect(page.locator('.map-pane .pane-title')).toContainText('VIIRS Suomi-NPP active cell-days per 0.1° cell, August 2024, nighttime');
+  // Invalid parameters fall back to defaults rather than failing.
+  await page.goto('/?bbox=1,2,3&month=2024-13&view=nowhere');
+  await expect(page.locator('.study-area-name')).toHaveText('All Argentina');
+  await expect(page.locator('.month-pill')).toHaveText('2026-10');
+  await expect(page.getByRole('tablist', { name: 'Views' }).getByRole('tab', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
 });

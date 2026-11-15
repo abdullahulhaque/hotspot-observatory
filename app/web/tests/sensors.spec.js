@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openTab, openView } from './helpers.js';
 const fmt = value => value == null ? 'Unavailable' : new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(value);
 
 test('overlap defaults, full history and selected-month raw comparisons retain actual values and quality warnings', async ({ page, request }) => {
@@ -7,6 +8,7 @@ test('overlap defaults, full history and selected-month raw comparisons retain a
   const data = (await (await request.get(`/api/series?${params}`)).json()).data;
   await page.goto('/');
   await page.getByRole('button', { name: 'Gran Chaco', exact: true }).click();
+  await openTab(page, 'Raw sensors');
   const section = page.locator('#satellites'), panel = section.locator('.observation-comparison');
   const range = page.getByLabel('Sensor comparison range'), slider = page.getByLabel('Inspect satellite month');
   await expect(range).toHaveValue('overlap');
@@ -57,6 +59,7 @@ test('overlap defaults, full history and selected-month raw comparisons retain a
 
 test('compact instrument table replaces specification cards and preserves responsive paired charts', async ({ page }) => {
   await page.goto('/');
+  await openTab(page, 'Raw sensors');
   const section = page.locator('#satellites');
   await expect(section.locator('.raw-chart')).toHaveCount(2);
   const table = section.getByRole('table', { name: 'Instrument comparison' });
@@ -72,11 +75,13 @@ test('compact instrument table replaces specification cards and preserves respon
     if (width > 600) {
       expect(left.y).toBeCloseTo(right.y, 0);
       expect(right.x).toBeGreaterThan(left.x + left.width);
-    } else expect(right.y).toBeGreaterThanOrEqual(left.y + left.height);
+    } else await expect.poll(async () => {
+      // Charts re-measure after the resize; wait for the stacked layout to settle.
+      const [a, b] = await Promise.all([0, 1].map(i => section.locator('.raw-chart-card').nth(i).boundingBox()));
+      return b.y - (a.y + a.height);
+    }).toBeGreaterThanOrEqual(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(await table.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-    await page.getByRole('link', { name: 'Compare Sensors', exact: true }).click();
-    await expect.poll(() => section.evaluate(el => Math.abs(el.getBoundingClientRect().top - document.querySelector('.topbar').getBoundingClientRect().bottom - 16))).toBeLessThan(3);
     await section.screenshot({ path: `test-results/sensor-comparison-${width}.png` });
   }
 });
@@ -85,6 +90,7 @@ test('night raw observations use actual regional data, shared axes, linked month
   const meta = await (await request.get('/api/meta')).json();
   await page.goto('/');
   await page.getByRole('button', { name: 'Gran Chaco', exact: true }).click();
+  await openTab(page, 'Raw sensors');
   await page.getByLabel('Sensor comparison range').selectOption('full');
   const section = page.locator('#satellites');
   await expect(section.locator('.sensor-observation-controls')).toContainText('Gran Chaco');
@@ -107,8 +113,8 @@ test('night raw observations use actual regional data, shared axes, linked month
   // Before VIIRS began there must be no zero-valued line segment.
   const firstViirs = data.findIndex(row => row.raw_viirs != null);
   const firstX = await charts.nth(1).evaluate((svg, i) => {
-    const w = svg.viewBox.baseVal.width;
-    return 40 + i / (document.querySelector('#satellites input[type=range]').max) * (w - 52);
+    const w = svg.viewBox.baseVal.width, left = Number(svg.dataset.left), right = Number(svg.dataset.right);
+    return left + i / (document.querySelector('#satellites input[type=range]').max) * (w - left - right);
   }, firstViirs);
   const path = await charts.nth(1).locator('.raw-line').getAttribute('d');
   expect(Number(path.trim().match(/^M([\d.]+)/)[1])).toBeCloseTo(firstX, 4);

@@ -1,6 +1,7 @@
 """Read-only spatial/monthly aggregation of the harmonized Parquet contract."""
 from __future__ import annotations
 
+import calendar
 import csv
 import io
 import json
@@ -18,7 +19,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 
 from .quality import annotate, read_metadata
-from .validation_predictions import read_predictions
+from .validation_predictions import read_model_comparison, read_predictions
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "fixtures/synthetic_harmonized.parquet"
@@ -113,6 +114,7 @@ class DataStore:
         if self.path == PRODUCTION.resolve() and (not self.has_nrt or self.synthetic):
             raise ValueError("Production requires real data with current-contract nrt provenance.")
         self.contract = self.metadata_value(metadata, b"contract", "unspecified")
+        self.parameters = self.read_parameters(metadata)
         self.unit = "active cell-days"
         self.calibration = self.metadata_value(metadata, b"calibration", "unapproved / unspecified")
         self.coverage: dict[tuple[int, str], bool] = {}
@@ -122,6 +124,9 @@ class DataStore:
         self.flags = {}
         self.sources = {}
         self.nrt = {}
+        # Modelled cell values above the number of days in their month cannot be literal
+        # cell-day counts; they come from scaling MODIS cells to the national estimate.
+        self.excess = {"count": 0, "max": None, "months": set()}
         # Bounded-memory inventory. Never load the full production dataset into Python rows.
         for batch in self.dataset.scanner(batch_size=65536).to_batches():
             if not batch.num_rows:
@@ -134,6 +139,13 @@ class DataStore:
             for key, lo, hi in (("lon", 0, 2), ("lat", 1, 3)):
                 self.bounds[lo] = min(self.bounds[lo], pc.min(table[key]).as_py())
                 self.bounds[hi] = max(self.bounds[hi], pc.max(table[key]).as_py())
+            if "harmonized" in table.column_names:
+                high = table.filter(pc.and_(pc.not_equal(table["source"], "observed"), pc.greater(table["harmonized"], 28)))
+                for row in high.select(["year", "month", "harmonized"]).to_pylist():
+                    if row["harmonized"] > calendar.monthrange(row["year"], row["month"])[1]:
+                        self.excess["count"] += 1
+                        self.excess["max"] = max(self.excess["max"] or 0, row["harmonized"])
+                        self.excess["months"].add(f'{row["year"]:04}-{row["month"]:02}')
             grouped = table.group_by(["year", "month", "daynight", "source"]).aggregate(
                 [(metric, "count") for metric in METRICS] + [("gap_flag", "any")] + ([("nrt", "any")] if self.has_nrt else []))
             for row in grouped.to_pylist():
@@ -155,6 +167,21 @@ class DataStore:
     def metadata_value(metadata, key, fallback):
         values = sorted({m.get(key, fallback.encode()).decode("utf-8", errors="replace") for m in metadata})
         return "; ".join(values) or fallback
+
+    @staticmethod
+    def read_parameters(metadata):
+        """Processing parameters recorded in the Parquet file metadata (reproducibility)."""
+        values = {}
+        for key in ("unit", "calibration", "filters", "country", "coverage", "contract", "calibration_detail"):
+            found = sorted({m[key.encode()].decode("utf-8", errors="replace") for m in metadata if key.encode() in m})
+            if len(found) == 1:
+                values[key] = found[0]
+        if "calibration_detail" in values:
+            try:
+                values["calibration_detail"] = json.loads(values["calibration_detail"])
+            except ValueError:
+                pass
+        return values
 
     def provenance(self):
         return {"synthetic": self.synthetic, "unit": self.unit, "calibration": self.calibration}
@@ -246,7 +273,9 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
                 "end": f"{months[-1][0]:04}-{months[-1][1]:02}" if months else None,
                 "bbox": data.bounds if months else None, "has_harmonized": data.has_harmonized,
                 "coverage": json.loads((ROOT / "fixtures/argentina.geojson").read_text()),
-                "country": "Argentina"}
+                "country": "Argentina", "parameters": data.parameters,
+                "modelled_cells_exceeding_days": {"count": data.excess["count"], "max": data.excess["max"],
+                                                  "months": len(data.excess["months"])}}
 
     @api.get("/validation")
     def validation():
@@ -308,6 +337,10 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
                     "monthly_interval_coverage": coverage, "nominal_interval_coverage": payload.get("interval_80", {}).get("nominal"),
                     "live_year": payload.get("live_year", {}),
                     "prediction_series": read_predictions(validation_path, payload),
+                    "model_comparison": read_model_comparison(validation_path),
+                    "interval_80": payload.get("interval_80"), "model_a_ratio": payload.get("scores_by_period", {}).get("model_a_ratio"), "acq_date_spans": payload.get("acq_date_spans", {}), "join_check_2012": payload.get("join_check_2012"),
+                    "gap_filled_months": payload.get("gap_filled_months", []),
+                    "gap_flagged_months": payload.get("gap_flagged_months", []),
                     "notes": [str(note) for note in payload.get("notes", [])]}
         except (OSError, ValueError, KeyError, TypeError) as exc:
             return {"status": "invalid", "message": f"Cannot read validation scores: {exc}", "metrics": []}
@@ -379,6 +412,7 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
                 metrics[metric] = {"value": value, "historical_median": baseline, "difference": difference,
                                    "percent_change": 100 * difference / baseline if difference is not None and baseline else None,
                                    "baseline_years": [r["year"] for r in history], "sample_size": len(history),
+                                   "history": [{"year": r["year"], "value": r[metric], "source": r["source"]} for r in history],
                                    "rank": 1 + sum(r[metric] > value for r in history) if eligible else None,
                                    "rank_count": len(history) + 1 if eligible else 0,
                                    "rank_tied": any(r[metric] == value for r in history) if eligible else False,
@@ -387,6 +421,31 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
         return {**data.provenance(), "bbox": bounds, "month": month,
                 "metric": "harmonized", "interval": band,
                 "baseline": "Same calendar month in available earlier years; incomplete observations and target year excluded.", "data": result}
+
+    @api.get("/grid")
+    def grid(month: str, daynight: str = "D", metric: str = "harmonized"):
+        """Per-cell values for one month, for the map layer. Values are read, never re-modelled."""
+        year, selected_month = parse_month(month)
+        if daynight not in ("D", "N"):
+            raise HTTPException(422, "Choose D or N for the map layer.")
+        if metric not in METRICS:
+            raise HTTPException(422, "metric must be harmonized, raw_modis, or raw_viirs.")
+        data = store()
+        cells = []
+        if (year, selected_month) in data.months:
+            table = data.dataset.to_table(columns=["lon", "lat", metric, "source"], filter=(
+                (ds.field("year") == year) & (ds.field("month") == selected_month) & (ds.field("daynight") == daynight)))
+            for row in table.to_pylist():
+                if row[metric] is not None and row[metric] > 0:
+                    cells.append([row["lon"], row["lat"], row[metric], row["source"]])
+        key = (year, selected_month, daynight)
+        available = bool(cells) or ((year, selected_month) in data.months and data.coverage.get((year, metric), False)
+                                    and not (year < 2012 and (metric == "raw_viirs" or (metric == "harmonized" and daynight == "N"))))
+        return {**data.provenance(), "month": month, "daynight": daynight, "metric": metric,
+                "cell_size_deg": 0.1, "available": available, "source": data.sources.get(key),
+                "gap_flag": data.flags.get(key, False), "nrt": data.nrt.get(key, False),
+                "count": len(cells), "total": sum(c[2] for c in cells), "max": max((c[2] for c in cells), default=0),
+                "cells": cells}
 
     @api.get("/area-summary")
     def area_summary(bbox: str, daynight: str = "D"):

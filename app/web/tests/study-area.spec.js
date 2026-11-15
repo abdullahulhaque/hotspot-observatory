@@ -1,16 +1,17 @@
 import { test, expect } from '@playwright/test';
+import { openTab, openView } from './helpers.js';
 
 for (const width of [1440, 390]) {
   test(`study-area selection, map controls and keyboard coordinates at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto('/');
-    await expect(page.locator('.raw-chart')).toHaveCount(2);
-    const section = page.locator('#where');
+    await expect(page.locator('.timeline-track')).toBeVisible();
+    const section = page.locator('.workspace');
     const presets = section.locator('.presets');
     const draw = section.getByRole('button', { name: 'Select area on map', exact: true });
     const canvas = section.locator('.maplibregl-canvas');
     await expect(presets.locator('[aria-pressed=true]')).toHaveText('All Argentina');
-    await expect(section.locator('.coverage-note')).toContainText('surrounding countries are excluded');
+    await expect(section.locator('.coverage-note')).toContainText('only cells inside Argentina are counted');
     await expect(section.locator('.small-area-warning')).toContainText('Regional estimates have not been independently validated');
     await expect(section.locator('.maplibregl-ctrl-attrib')).toContainText('OpenStreetMap');
 
@@ -30,6 +31,7 @@ for (const width of [1440, 390]) {
     await page.keyboard.press('Enter');
     await expect(section.locator('.study-area-name')).toHaveText('Pampas');
     await draw.click();
+    await canvas.scrollIntoViewIfNeeded();
     const rect = await canvas.boundingBox();
     const response = page.waitForResponse(r => r.url().includes('/area-summary?') && new URL(r.url()).searchParams.get('bbox') !== '-64,-38,-59,-33');
     await page.mouse.move(rect.x + rect.width * .35, rect.y + rect.height * .35);

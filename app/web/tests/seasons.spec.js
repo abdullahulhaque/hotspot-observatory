@@ -1,29 +1,22 @@
 import { test, expect } from '@playwright/test';
+import { openTab, openView } from './helpers.js';
 const fmt = value => new Intl.NumberFormat('en-US', {maximumFractionDigits:1}).format(value);
 
-test('navigation tracks initial load, scroll, links and reduced motion', async ({page}) => {
+test('view and analysis tabs update the address and survive a reload', async ({page}) => {
   await page.setViewportSize({width:1024,height:1100});
   await page.goto('/');
-  const current = page.locator('.section-nav [aria-current="location"]');
-  await expect(current).toHaveText('Study Area');
-  await expect(page.locator('.raw-chart')).toHaveCount(2);
-  await page.evaluate(() => window.scrollTo({top:document.getElementById('satellites').offsetTop,behavior:'instant'}));
-  await expect(current).toHaveText('Compare Sensors');
-  await page.evaluate(() => window.scrollTo({top:document.getElementById('history').offsetTop,behavior:'instant'}));
-  await expect(current).toHaveText('Harmonization');
-  await page.getByRole('link',{name:'Fire History',exact:true}).click();
-  await expect(page).toHaveURL(/#explore$/);
-  await expect(current).toHaveText('Fire History');
-  await expect.poll(() => page.locator('#explore').evaluate(el=>Math.abs(el.getBoundingClientRect().top-document.querySelector('.topbar').getBoundingClientRect().height-16))).toBeLessThan(3);
-  expect(await page.evaluate(()=>getComputedStyle(document.documentElement).scrollBehavior)).toBe('smooth');
-  await page.getByRole('link',{name:'Study Area',exact:true}).click();
-  await expect(current).toHaveText('Study Area');
-  await page.emulateMedia({reducedMotion:'reduce'});
-  expect(await page.evaluate(()=>getComputedStyle(document.documentElement).scrollBehavior)).toBe('auto');
-  await page.getByRole('button',{name:'Compare seasons',exact:true}).click();
-  await page.setViewportSize({width:1440,height:1800});
-  await page.evaluate(()=>window.scrollTo({top:document.documentElement.scrollHeight,behavior:'instant'}));
-  await expect(current).toHaveText('Fire History');
+  const current = page.getByRole('tablist',{name:'Views'}).locator('[aria-selected=true]');
+  await expect(current).toHaveText('Explore');
+  await openView(page, 'Methods');
+  await expect(page).toHaveURL(/view=methods/);
+  await expect(page.getByRole('heading',{level:1})).toHaveText('How the two records are put on one scale');
+  await page.reload();
+  await expect(current).toHaveText('Methods');
+  await openView(page, 'Explore');
+  await openTab(page, 'Seasons');
+  await page.reload();
+  await expect(page.getByRole('tablist',{name:'Analyses'}).locator('[aria-selected=true]')).toHaveText('Seasons');
+  await expect(page.locator('.season-panel')).toBeVisible();
 });
 
 test('Gran Chaco: ten complete springs, actual harmonized totals, partial October and regional updates', async ({page,request}) => {
@@ -34,7 +27,7 @@ test('Gran Chaco: ten complete springs, actual harmonized totals, partial Octobe
   const sorted=[...totals].sort((a,b)=>a-b), median=(sorted[4]+sorted[5])/2;
   await page.goto('/');
   await page.getByRole('button',{name:'Gran Chaco',exact:true}).click();
-  await page.getByRole('button',{name:'Compare seasons',exact:true}).click();
+  await openTab(page, 'Seasons');
   await expect(page.locator('.season-panel')).toHaveAttribute('aria-busy','false');
   await expect(page.getByLabel('Season',{exact:true})).toHaveValue('spring');
   await expect(page.getByLabel('Comparison window')).toHaveValue('10');
@@ -67,7 +60,7 @@ test('Gran Chaco: ten complete springs, actual harmonized totals, partial Octobe
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.locator('.season-panel').screenshot({path:'test-results/seasons-mobile.png'});
-  await page.getByRole('button',{name:'Fire calendar',exact:true}).click();
+  await openTab(page, 'Calendar');
   await expect(page.locator('.calendar')).toBeVisible();
   await expect(page.locator('.anomaly-panel')).toBeVisible();
   await expect(page.locator('.study-area-name')).toHaveText('Pampas');
@@ -75,7 +68,7 @@ test('Gran Chaco: ten complete springs, actual harmonized totals, partial Octobe
 
 test('summer boundaries and incomplete winter coverage preserve source flags and night filtering', async ({page}) => {
   await page.goto('/');
-  await page.getByRole('button',{name:'Compare seasons',exact:true}).click();
+  await openTab(page, 'Seasons');
   await page.getByLabel('Season',{exact:true}).selectOption('summer');
   const summer=page.locator('[data-season="summer-2025"]');
   await summer.focus();

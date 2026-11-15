@@ -1,23 +1,30 @@
-import { useEffect, useMemo, useState } from 'react';
-import MonthQuality from './MonthQuality.jsx';
-import { comparisonBlocked } from './provenance.js';
-import SectionNav from './SectionNav.jsx';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import SeasonComparison from './SeasonComparison.jsx';
 import RegionMap from './Map.jsx';
 import SensorComparison from './SensorComparison.jsx';
 import MethodPanel from './MethodPanel.jsx';
 import AreaSummary from './AreaSummary.jsx';
 import WhyHarmonize from './WhyHarmonize.jsx';
-import { CIVIDIS, heatColor, legendTicks } from './heatScale.js';
+import Hero from './Hero.jsx';
+import DataSources from './DataSources.jsx';
+import MethodSteps from './MethodSteps.jsx';
+import Limitations from './Limitations.jsx';
+import Timeline from './Timeline.jsx';
+import Inspector from './Inspector.jsx';
+import CalendarPanel from './CalendarPanel.jsx';
+import { RegionalComparison, TimingTrend } from './Analyses.jsx';
+import { CIVIDIS, legendTicks } from './heatScale.js';
 import { withSelection } from './exportCsv.js';
 
 const API = import.meta.env.VITE_API_BASE || '/api';
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const LABELS = { raw_modis: 'MODIS Aqua', raw_viirs: 'VIIRS Suomi-NPP', harmonized: 'Harmonized' };
 const format = value => value == null ? '—' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(value);
 const monthLabel = value => value ? new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}-01T00:00:00Z`)) : 'Loading…';
 const PRESETS = [['All Argentina', [-74,-56,-53,-21]], ['Gran Chaco', [-64,-28,-59,-24]], ['Pampas', [-64,-38,-59,-33]], ['Patagonia', [-71,-50,-67,-40]]];
-const monthKey = row => `${row.year}-${String(row.month).padStart(2, '0')}`;
+const ALL_ARGENTINA = PRESETS[0][1];
+const VIEWS = [['explore', 'Explore'], ['validation', 'Validation'], ['methods', 'Methods'], ['data', 'Data'], ['limitations', 'Limitations'], ['about', 'About']];
+const TABS = [['calendar', 'Calendar'], ['seasons', 'Seasons'], ['record', 'Annual record'], ['trend', 'Timing & trend'], ['regions', 'Regions'], ['sensors', 'Raw sensors']];
+const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 function validateBounds(values) {
   if (values.some(v => String(v).trim() === '' || !Number.isFinite(Number(v)))) return 'Enter all four coordinates.';
   const [w, s, e, n] = values.map(Number);
@@ -33,20 +40,51 @@ async function getJSON(path, signal) {
   }
   return response.json();
 }
+// The URL holds the analysis state, so any view can be bookmarked or shared.
+function readUrl() {
+  const p = new URLSearchParams(window.location.search);
+  const bbox = (p.get('bbox') || '').split(',');
+  const pick = (name, allowed, fallback) => allowed.includes(p.get(name)) ? p.get(name) : fallback;
+  const series = pick('series', ['harmonized', 'raw_modis', 'raw_viirs'], 'harmonized');
+  return {
+    view: pick('view', VIEWS.map(v => v[0]), 'explore'), tab: pick('tab', TABS.map(t => t[0]), 'calendar'),
+    bounds: bbox.length === 4 && !validateBounds(bbox) ? bbox.map(Number) : ALL_ARGENTINA,
+    start: MONTH.test(p.get('start') || '') ? p.get('start') : '', end: MONTH.test(p.get('end') || '') ? p.get('end') : '',
+    month: MONTH.test(p.get('month') || '') ? p.get('month') : '', period: pick('period', ['D', 'N'], 'D'),
+    mode: series === 'harmonized' ? 'harmonized' : 'raw', sensor: series === 'harmonized' ? 'raw_modis' : series,
+  };
+}
+
+function Tabs({ items, active, onChange, label, className = '' }) {
+  const refs = useRef({});
+  const onKeyDown = (event, index) => {
+    const delta = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    const [id] = items[(index + delta + items.length) % items.length];
+    onChange(id); refs.current[id]?.focus();
+  };
+  return <div className={`tabs ${className}`} role="tablist" aria-label={label}>{items.map(([id, name], index) =>
+    <button key={id} ref={el => { refs.current[id] = el; }} role="tab" id={`tab-${id}`} aria-selected={active === id} aria-controls={`panel-${id}`} tabIndex={active === id ? 0 : -1}
+      onClick={() => onChange(id)} onKeyDown={event => onKeyDown(event, index)}>{name}</button>)}</div>;
+}
 
 export default function App() {
+  const initial = useMemo(readUrl, []);
+  const [view, setView] = useState(initial.view), [tab, setTab] = useState(initial.tab);
   const [meta, setMeta] = useState(null), [error, setError] = useState('');
-  const [bounds, setBounds] = useState([-74, -56, -53, -21]), [inputs, setInputs] = useState(['-74', '-56', '-53', '-21']);
-  const [start, setStart] = useState('2003-01'), [end, setEnd] = useState(''), [period, setPeriod] = useState('D');
-  const [mode, setMode] = useState('harmonized'), [sensor, setSensor] = useState('raw_modis');
-  const [selected, setSelected] = useState(''), [series, setSeries] = useState(null), [anomaly, setAnomaly] = useState(null);
+  const [bounds, setBounds] = useState(initial.bounds), [inputs, setInputs] = useState(initial.bounds.map(String));
+  const [start, setStart] = useState(initial.start), [end, setEnd] = useState(initial.end), [period, setPeriod] = useState(initial.period);
+  const [mode, setMode] = useState(initial.mode), [sensor, setSensor] = useState(initial.sensor);
+  const [selected, setSelected] = useState(initial.month), [series, setSeries] = useState(null), [anomaly, setAnomaly] = useState(null);
   const [loading, setLoading] = useState(true), [anomalyError, setAnomalyError] = useState(''), [formError, setFormError] = useState('');
-  const [retry, setRetry] = useState(0), [downloading, setDownloading] = useState(false);
+  const [retry, setRetry] = useState(0), [downloading, setDownloading] = useState(false), [copied, setCopied] = useState(false);
   const [validation, setValidation] = useState(null);
   const [area, setArea] = useState(null), [areaLoading, setAreaLoading] = useState(true), [areaError, setAreaError] = useState('');
   const [daytime, setDaytime] = useState(null), [dayLoading, setDayLoading] = useState(true), [dayError, setDayError] = useState('');
-  const [exploreView, setExploreView] = useState('calendar');
   const [seasonNight, setSeasonNight] = useState(null), [seasonLoading, setSeasonLoading] = useState(true), [seasonError, setSeasonError] = useState('');
+  const [national, setNational] = useState(null), [grid, setGrid] = useState(null), [gridError, setGridError] = useState('');
+  const [regions, setRegions] = useState(PRESETS.map(([name]) => ({ name, loading: true })));
   const metric = mode === 'harmonized' ? 'harmonized' : sensor;
   const query = useMemo(() => new URLSearchParams({ bbox: bounds.join(','), start, end, daynight: period }), [bounds, start, end, period]);
 
@@ -57,12 +95,23 @@ export default function App() {
       setMeta(data);
       if (data.start && data.end) {
         const latest = data.latest_complete_month && data.latest_complete_month < data.end ? data.latest_complete_month : data.end;
-        setStart('2003-01'); setEnd(latest);
-        setSelected(latest);
+        // Fill defaults only where neither the URL nor the user has chosen a value.
+        setStart(value => value || data.start); setEnd(value => value || latest);
+        setSelected(value => value || latest);
       }
     }).catch(err => { if (err.name !== 'AbortError') { setError(err.message); setLoading(false); } });
+    getJSON(`/area-summary?bbox=${ALL_ARGENTINA.join(',')}&daynight=D`, controller.signal).then(setNational)
+      .catch(err => { if (err.name !== 'AbortError') setNational({ error: err.message }); });
     return () => controller.abort();
   }, [retry]);
+
+  // Keep the URL in step with the analysis state (no history entries for every change).
+  useEffect(() => {
+    if (!meta) return;
+    const p = new URLSearchParams({ view, tab, bbox: bounds.join(','), start, end, month: selected, period, series: metric });
+    window.history.replaceState(null, '', `${window.location.pathname}?${p}`);
+    setCopied(false);
+  }, [meta, view, tab, bounds, start, end, selected, period, metric]);
 
   useEffect(() => {
     if (!meta) return;
@@ -76,7 +125,7 @@ export default function App() {
   }, [meta, query, retry]);
 
   useEffect(() => {
-    if (start && end && start <= end) setSelected(value => value < start ? start : value > end ? end : value);
+    if (start && end && start <= end) setSelected(value => !value ? value : value < start ? start : value > end ? end : value);
   }, [start, end]);
 
   useEffect(() => {
@@ -87,6 +136,15 @@ export default function App() {
     getJSON(`/anomaly?${params}`, controller.signal).then(setAnomaly).catch(err => { if (err.name !== 'AbortError') setAnomalyError(err.message); });
     return () => controller.abort();
   }, [meta, bounds, selected, period, retry]);
+
+  useEffect(() => {
+    if (!meta || !selected) return;
+    const controller = new AbortController();
+    setGridError('');
+    const params = new URLSearchParams({ month: selected, daynight: period, metric });
+    getJSON(`/grid?${params}`, controller.signal).then(setGrid).catch(err => { if (err.name !== 'AbortError') { setGrid(null); setGridError(err.message); } });
+    return () => controller.abort();
+  }, [meta, selected, period, metric, retry]);
 
   useEffect(() => {
     if (!meta) return;
@@ -104,15 +162,30 @@ export default function App() {
     const controller = new AbortController();
     setDayLoading(true); setDayError(''); setDaytime(null);
     const params = new URLSearchParams({ bbox: bounds.join(','), start: meta.start, end: meta.end, daynight: 'D' });
-    getJSON(`/series?${params}`, controller.signal).then(data => {
-      setDaytime(data);
-    }).catch(err => { if (err.name !== 'AbortError') setDayError(err.message); })
+    getJSON(`/series?${params}`, controller.signal).then(setDaytime).catch(err => { if (err.name !== 'AbortError') setDayError(err.message); })
       .finally(() => { if (!controller.signal.aborted) setDayLoading(false); });
     return () => controller.abort();
   }, [meta, bounds, retry]);
 
+  // Regional profiles always compare the four fixed preset areas; load on first use.
+  const regionsWanted = tab === 'regions' && view === 'explore';
+  const [regionsRequested, setRegionsRequested] = useState(false);
+  useEffect(() => { if (regionsWanted) setRegionsRequested(true); }, [regionsWanted]);
   useEffect(() => {
-    if (exploreView !== 'seasons' || period !== 'N' || !meta?.start || !meta?.end) return;
+    if (!regionsRequested || !meta?.start || !meta?.end) return;
+    const controller = new AbortController();
+    setRegions(PRESETS.map(([name]) => ({ name, loading: true })));
+    PRESETS.forEach(([name, box], index) => {
+      const params = new URLSearchParams({ bbox: box.join(','), start: meta.start, end: meta.end, daynight: 'D' });
+      getJSON(`/series?${params}`, controller.signal)
+        .then(data => setRegions(list => list.map((r, i) => i === index ? { name, series: data } : r)))
+        .catch(err => { if (err.name !== 'AbortError') setRegions(list => list.map((r, i) => i === index ? { name, error: err.message } : r)); });
+    });
+    return () => controller.abort();
+  }, [regionsRequested, meta, retry]);
+
+  useEffect(() => {
+    if (tab !== 'seasons' || period !== 'N' || !meta?.start || !meta?.end) return;
     const controller = new AbortController();
     setSeasonNight(null); setSeasonLoading(true); setSeasonError('');
     const params = new URLSearchParams({ bbox: bounds.join(','), start: meta.start, end: meta.end, daynight: 'N' });
@@ -120,20 +193,19 @@ export default function App() {
       if (err.name !== 'AbortError') setSeasonError(err.message);
     }).finally(() => { if (!controller.signal.aborted) setSeasonLoading(false); });
     return () => controller.abort();
-  }, [exploreView, period, meta, bounds, retry]);
+  }, [tab, period, meta, bounds, retry]);
 
   const applyBounds = values => { setBounds(values); setInputs(values.map(String)); setFormError(''); };
   const rows = series?.data || [];
   const noData = series?.has_data === false;
   const nightUnavailable = mode === 'harmonized' && period === 'N' && start < '2012-01';
-  const lookup = new Map(rows.map(row => [monthKey(row), row]));
-  const years = [...new Set(rows.map(row => row.year))];
-  const max = Math.max(0, ...rows.map(row => row[metric] ?? 0));
   const available = rows.filter(row => row[metric] != null);
   const total = available.length ? available.reduce((sum, row) => sum + row[metric], 0) : null;
-  const anomalyRow = anomaly?.data?.[0];
-  const stats = anomalyRow?.metrics?.harmonized;
   const synthetic = meta?.synthetic || series?.synthetic || anomaly?.synthetic;
+  const regionName = PRESETS.find(([,values]) => values.join(',') === bounds.join(','))?.[0] || 'Custom area';
+  const latestMonth = meta?.latest_complete_month && meta.latest_complete_month < meta.end ? meta.latest_complete_month : meta?.end;
+  const periodName = period === 'D' ? 'Daytime' : 'Nighttime';
+  const openView = (nextView, nextTab) => { setView(nextView); if (nextTab) setTab(nextTab); };
 
   async function download() {
     setDownloading(true);
@@ -147,112 +219,103 @@ export default function App() {
     } catch (err) { setError(err.message); }
     finally { setDownloading(false); }
   }
+  async function copyLink() {
+    try { await navigator.clipboard.writeText(window.location.href); setCopied(true); }
+    catch { setCopied(false); setError('Copy the address bar to share this view; the browser blocked clipboard access.'); }
+  }
 
-  const regionName = PRESETS.find(([,values]) => values.join(',') === bounds.join(','))?.[0] || 'Custom area';
-  const latestMonth = meta?.latest_complete_month && meta.latest_complete_month < meta.end ? meta.latest_complete_month : meta?.end;
+  return <div className={`tool view-${view}`}>
+    <header className="toolbar">
+      <a className="brand" href="?view=about" onClick={event => { event.preventDefault(); openView('about'); }}><svg className="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 2h20v20H2z M8.67 2v20 M15.33 2v20 M2 8.67h20 M2 15.33h20" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="8.67" y="8.67" width="6.66" height="6.66" fill="#C24F00"/></svg><span>Hotspot Observatory<small>Harmonized satellite fire history</small></span></a>
+      <Tabs items={VIEWS} active={view} onChange={openView} label="Views" className="view-tabs"/>
+      <p className="toolbar-status">{meta ? <>{meta.country} · {meta.start}–{latestMonth} · {meta.calibration}</> : 'Loading record…'}</p>
+    </header>
+    {synthetic && <div className="synthetic-banner" role="status"><strong>Synthetic data</strong><span>Invented demonstration values. Not NASA observations. Not for scientific use.</span></div>}
+    {error && <div className="error" role="alert">{error} <button onClick={() => setRetry(v => v + 1)}>Retry</button></div>}
 
-  return <div className="app-shell">
-    <header className="topbar"><div className="topbar-inner"><div className="brand"><span className="brand-icon" aria-hidden="true">◉</span><div>HOTSPOT <strong>OBSERVATORY</strong><small>Harmonized satellite fire history</small></div></div><SectionNav/></div></header>
-    {synthetic && <div className="synthetic-banner" role="status"><strong>◈ SYNTHETIC DATA</strong><span>Invented demonstration values. Not NASA observations. Not for scientific use.</span></div>}
-    <main className="four-section-page">
-      <div className="page-heading"><div><h1>Harmonized fire activity from MODIS and VIIRS</h1><p className="hero-subhead">Explore decades of satellite-detected fire activity through a unified historical record. Compare burning patterns across regions, seasons, and years, identify unusual activity, and investigate long-term trends using NASA observations calibrated for differences between satellite instruments.</p><p className="hero-note">Current coverage: {meta?.country || 'Argentina'}, {meta?.start?.slice(0, 4) || '2003'}–{latestMonth?.slice(0, 4) || '2026'} · More regions planned</p><details className="measurement-explanation"><summary>Data and methods</summary><p>Argentina is divided into 0.1° geographic grid cells. Each cell with at least one hotspot detection on a day contributes one active cell-day. The same cell can count again on another day. This measures satellite-detected activity, not unique fires or burned area.</p></details></div></div>
-      {error && <div className="error" role="alert">{error} <button onClick={() => setRetry(v => v + 1)}>Retry</button></div>}
-      <section id="where" className="page-section" aria-labelledby="where-title">
-        <div className="page-section-heading"><span>01</span><h2 id="where-title">Choose your study area.</h2><p>Select a region or define your own area to explore NASA satellite observations.</p></div>
-        <div className="where-grid"><div className="map-container">{meta ? <RegionMap bounds={bounds} onSelect={applyBounds} coverage={meta.coverage} /> : <div className="map-shell empty">Loading Argentina coverage…</div>}</div>
-          <section className="panel region-panel" aria-label="Current study area">
-            <div className="presets" aria-label="Study area presets">{PRESETS.map(([name, values]) => <button key={name} aria-pressed={regionName === name} onClick={() => applyBounds(values)}>{name}</button>)}</div>
-            <div className="current-study-area"><h3>Current study area</h3><p className="study-area-name" aria-live="polite">{regionName}</p><p className="historical-record">Historical record: {monthLabel(meta?.start)} - {monthLabel(latestMonth)}</p></div>
-            <p className="coverage-note">The selected rectangle is a geographic bounding box. Analyses include only data within Argentina coverage; surrounding countries are excluded.</p>
-            <details className="custom-coordinates"><summary>Custom coordinates</summary>
-            <p id="coordinate-help" className="coordinate-help">Signed decimal degrees: negative longitude is west; negative latitude is south.</p>
+    {view === 'explore' && <div className="workspace" id="panel-explore" role="tabpanel" aria-labelledby="tab-explore">
+      <aside className="controls" aria-label="Analysis controls">
+        <section className="control-group region-panel" aria-label="Current study area">
+          <h2 className="control-title">Study area</h2>
+          <div className="presets" aria-label="Study area presets">{PRESETS.map(([name, values]) => <button key={name} aria-pressed={regionName === name} onClick={() => applyBounds(values)}>{name}</button>)}</div>
+          <div className="current-study-area"><p className="study-area-name" aria-live="polite">{regionName}</p><p className="bbox-readout">{bounds.map(v => `${v}°`).join(', ')} <span>(W, S, E, N)</span></p><p className="historical-record">Historical record: {monthLabel(meta?.start)} - {monthLabel(latestMonth)}</p></div>
+          <details className="custom-coordinates"><summary>Custom coordinates</summary>
+            <p id="coordinate-help" className="coordinate-help">Signed decimal degrees: negative longitude is west; negative latitude is south. You can also draw a rectangle on the map.</p>
             <form onSubmit={event => { event.preventDefault(); const message = validateBounds(inputs); setFormError(message); if (!message) applyBounds(inputs.map(Number)); }}>
               <div className="coordinate-grid">{[['West longitude', 'W', 0], ['East longitude', 'E', 2], ['South latitude', 'S', 1], ['North latitude', 'N', 3]].map(([label, short, index]) =>
                 <label key={short}>{label}<div className="coordinate-input"><input aria-label={label} aria-describedby="coordinate-help" type="number" step="any" min={index % 2 ? -90 : -180} max={index % 2 ? 90 : 180} value={inputs[index]} onChange={event => setInputs(previous => previous.map((value, i) => i === index ? event.target.value : value))} required /><span aria-hidden="true">°</span></div></label>)}</div>
               {formError && <p className="field-error" role="alert">{formError}</p>}<button className="apply" type="submit">Update study area</button>
             </form>
-            </details>
-            <p className="small-area-warning">Calibration was validated nationally. Regional estimates have not been independently validated; small-area estimates are less reliable.</p>
-          </section>
-        </div>
-        <a className="next-section" href="#satellites">Next: Compare satellite observations</a>
-      </section>
-      <section id="satellites" className="page-section compact-section" aria-labelledby="satellites-title">
-        <SensorComparison daytime={daytime} loading={dayLoading} error={dayError} meta={meta} bounds={bounds} regionName={regionName} retry={retry} getJSON={getJSON}/>
-      </section>
-      <section id="history" className="page-section compact-section" aria-labelledby="history-title">
-        <div className="page-section-heading"><span>03</span><h2 id="history-title">Making satellite observations comparable</h2><p>We calibrate MODIS observations against VIIRS using overlapping years, then test the correction on observations excluded from model training.</p></div>
-        <MethodPanel validation={validation} calibration={meta?.calibration}>
-          <WhyHarmonize data={area} loading={areaLoading} error={areaError} monthly={daytime} monthlyLoading={dayLoading} monthlyError={dayError} regionName={regionName} compact />
-        </MethodPanel>
-      </section>
-      <section id="explore" className="page-section explore-section" aria-labelledby="explore-title">
-        <div className="page-section-heading"><span>04</span><h2 id="explore-title">Explore historical burning activity</h2><p>Examine monthly patterns, compare fire seasons, and investigate unusual activity in your selected study area.</p></div>
-        <div className="explore-context"><p>Study area <strong>{regionName}</strong></p><p>Available record <strong>{monthLabel(meta?.start)} – {monthLabel(latestMonth)}</strong></p></div>
-        <p className="explore-unit-note">Active cell-days measure satellite-detected activity, not unique wildfires or burned area. Regional estimates have not been independently validated.</p>
-        <div className="mode-toggle explore-view-toggle" aria-label="History view"><button aria-pressed={exploreView === 'calendar'} className={exploreView === 'calendar' ? 'selected' : ''} onClick={() => setExploreView('calendar')}>Fire calendar</button><button aria-pressed={exploreView === 'seasons'} className={exploreView === 'seasons' ? 'selected' : ''} onClick={() => setExploreView('seasons')}>Compare seasons</button></div>
-        {exploreView === 'seasons' && <SeasonComparison series={period === 'D' ? daytime : seasonNight} loading={period === 'D' ? dayLoading : seasonLoading} error={period === 'D' ? dayError : seasonError} start={meta?.start} end={latestMonth} regionName={regionName} period={period} onPeriodChange={setPeriod}/>}
-        <div className="calendar-view" hidden={exploreView !== 'calendar'}>
-          <section className="panel observation-controls"><h3>Observation window</h3>
-            <div className="date-grid"><label>From<input type="month" aria-label="Start month" value={start} onChange={event => setStart(event.target.value)} /></label><label>To<input type="month" aria-label="End month" max={meta?.end} value={end} onChange={event => setEnd(event.target.value)} /></label></div>
-            <div className="filter-grid"><label>Acquisition<select value={period} onChange={event => setPeriod(event.target.value)} aria-label="Day or night"><option value="D">Daytime</option><option value="N">Nighttime</option></select></label>
-              <label>Raw sensor<select value={sensor} onChange={event => setSensor(event.target.value)} disabled={mode !== 'raw'} aria-label="Raw sensor"><option value="raw_modis">MODIS Aqua</option><option value="raw_viirs">VIIRS S-NPP</option></select></label></div>
-            <div className="summary"><div><strong>{noData ? 'No data in this area' : format(total)}</strong><span>active cell-days · {available.length} available months · {LABELS[metric]}</span></div><span className="summary-icon" aria-hidden="true">▥</span></div>
+          </details>
+          <p className="coverage-note">The rectangle is a bounding box; only cells inside Argentina are counted.</p>
+          <p className="small-area-warning">Calibration was validated nationally. Regional estimates have not been independently validated; small-area estimates are less reliable.</p>
+        </section>
+        <section className="control-group" aria-label="Series">
+          <h2 className="control-title">Series</h2>
+          <div className="mode-toggle" aria-label="Data scale">
+            <button aria-pressed={mode === 'harmonized'} className={mode === 'harmonized' ? 'selected' : ''} onClick={() => setMode('harmonized')}>Harmonized</button>
+            <button aria-pressed={mode === 'raw'} className={mode === 'raw' ? 'selected' : ''} onClick={() => setMode('raw')}>Raw</button></div>
+          <div className="filter-grid"><label>Raw sensor<select value={sensor} onChange={event => setSensor(event.target.value)} disabled={mode !== 'raw'} aria-label="Raw sensor"><option value="raw_modis">MODIS Aqua</option><option value="raw_viirs">VIIRS S-NPP</option></select></label>
+            <label>Acquisition<select value={period} onChange={event => setPeriod(event.target.value)} aria-label="Day or night"><option value="D">Daytime</option><option value="N">Nighttime</option></select></label></div>
+          <p className="control-note">{mode === 'harmonized' ? 'VIIRS-scale record: observed VIIRS from 2012, MODIS-based estimates before 2012 and in outage months.' : 'Uncalibrated detections from one instrument; not comparable across instruments.'}</p>
+        </section>
+        <section className="control-group observation-controls" aria-label="Time window">
+          <h2 className="control-title">Time window</h2>
+          <div className="date-grid"><label>From<input type="month" aria-label="Start month" value={start} onChange={event => setStart(event.target.value)} /></label><label>To<input type="month" aria-label="End month" max={meta?.end} value={end} onChange={event => setEnd(event.target.value)} /></label></div>
+          <div className="summary"><strong>{noData ? 'No data in this area' : format(total)}</strong><span>active cell-days · {available.length} available months · {LABELS[metric]}</span></div>
+          {available.some(row => row.incomplete_metrics?.includes(metric)) && <p className="footnote quality-notice">This total includes incomplete observations; it can undercount activity. Inspect the ! months in the calendar.</p>}
+          {available.some(row => row.nrt) && <p className="footnote">NRT months are provisional and may change on refresh.</p>}
+        </section>
+        <section className="control-group csv-row" aria-label="Export">
+          <h2 className="control-title">Export</h2>
+          <p>{regionName} · {start} to {end} · {periodName} · active cell-days. Harmonized and raw values, bounds, provenance, completeness flags and interval bounds; unavailable values stay blank.</p>
+          <button className="export" title="Export all measurements and geographic selection metadata" onClick={download} disabled={!series || loading || downloading}>{downloading ? 'Preparing…' : 'Download CSV'}</button>
+          <button className="secondary-button" onClick={copyLink} disabled={!meta}>{copied ? 'Link copied' : 'Copy link to this view'}</button>
+        </section>
+      </aside>
 
-            {available.some(row => row.incomplete_metrics?.includes(metric)) && <p className="footnote quality-notice">This total includes incomplete observations; it can undercount activity. Inspect the ! months below.</p>}
-            {available.some(row => row.nrt) && <p className="footnote">NRT months are provisional and may change on refresh.</p>}
-          </section>
-        <div className="explore-grid">
-          <section className="calendar-panel">
-            <div className="section-title"><h3>Monthly activity calendar</h3><div className="mode-toggle" aria-label="Data scale">
-              <button aria-pressed={mode === 'raw'} className={mode === 'raw' ? 'selected' : ''} onClick={() => setMode('raw')}>Raw</button>
-              <button aria-pressed={mode === 'harmonized'} className={mode === 'harmonized' ? 'selected' : ''} onClick={() => setMode('harmonized')}>Harmonized</button></div></div>
-            <div className="calendar-description"><span>{LABELS[metric]} · {period === 'D' ? 'Daytime' : 'Nighttime'} · active cell-days</span><span>Select a month to inspect</span></div>
-            <p className="calendar-scroll-hint">Scroll horizontally to inspect all twelve months.</p>
-            {mode === 'harmonized' && !meta?.has_harmonized && <div className="info">Harmonized values are unavailable. Missing values are not zero.</div>}
-            {nightUnavailable && <div className="info" role="status">Nighttime harmonized is unavailable before 2012. No night back-cast is produced; these months are missing, not zero.</div>}
-            <div className="calendar-scroll" aria-busy={loading}>
-              {loading ? <div className="empty">Loading monthly activity…</div> : noData ? <div className="empty">No data in this area</div> : !rows.some(r => r[metric] != null) ? <div className="empty">{nightUnavailable ? 'Nighttime harmonized is unavailable before 2012' : 'No data for this sensor in this date range'}</div> :
-                <div className="calendar" role="group" aria-label="Year by month activity heatmap">
-                  <div className="calendar-row month-labels"><span>YEAR</span>{MONTHS.map(month => <span key={month}>{month}</span>)}</div>
-                  {years.map(year => <div className="calendar-row" key={year}><span className="year-label">{year}</span>{MONTHS.map((month, index) => {
-                    const key = `${year}-${String(index + 1).padStart(2, '0')}`, row = lookup.get(key), value = row?.[metric];
-                    const color = heatColor(value, max);
-                    const source = mode === 'harmonized' ? row?.source : 'observed';
-                    const provenance = mode === 'harmonized' ? source === 'backcast' ? 'Back-cast estimate from MODIS' : source === 'gapfill' ? 'Gap-filled estimate from MODIS' : 'Observed VIIRS' : `Observed ${LABELS[metric]}`;
-                    const completeness = !row ? 'Outside selected date range' : value == null ? 'Unavailable' : row.incomplete_metrics?.includes(metric) ? 'Incomplete observations' : !row.quality_available ? 'Coverage metadata unavailable' : mode === 'harmonized' && source !== 'observed' ? 'MODIS input coverage complete' : 'Complete observation coverage';
-                    const description = `${month} ${year} · ${value == null ? 'Unavailable' : `${format(value)} active cell-days · ${provenance}`} · ${completeness}${mode === 'harmonized' && source !== 'observed' && row?.incomplete_metrics?.includes('raw_viirs') ? ' · Raw VIIRS incomplete' : ''}${row?.gap_flag ? ' · Sensor gap flagged' : ''}${row?.nrt ? ' · NRT · provisional' : ''}${synthetic ? ' · Synthetic data' : ''}`;
-                    return <button key={key} disabled={!row} className={`cell ${value == null ? 'missing' : ''} ${source === 'backcast' ? 'backcast' : source === 'gapfill' ? 'gapfill' : ''} ${row?.gap_flag ? 'gap-flag' : ''} ${row?.incomplete_metrics?.includes(metric) ? 'incomplete-cell' : ''} ${row?.nrt ? 'nrt-cell' : ''} ${selected === key ? 'chosen' : ''}`}
-                      style={{ backgroundColor: color }} onClick={() => setSelected(key)} aria-pressed={selected === key}
-                      aria-label={`${month} ${year}: ${description.slice(`${month} ${year} · `.length)}`}
-                      title={description} ><span className="source-symbol" aria-hidden="true">{source === 'backcast' ? '•' : source === 'gapfill' ? '◆' : ''}</span>{row?.gap_flag && <span className="gap-symbol" aria-hidden="true">△</span>}{row?.incomplete_metrics?.includes(metric) && <span className="incomplete-symbol" aria-hidden="true">!</span>}{row?.nrt && <span className="nrt-symbol" aria-hidden="true">N</span>}</button>;
-                  })}</div>)}
-                </div>}
-            </div>
-            <div className="heat-scale" aria-label="Square-root cividis colour scale"><span>active cell-days · square-root scale</span><div className="heat-ramp" style={{ background: `linear-gradient(to right, ${CIVIDIS.join(',')})` }} /><div className="heat-ticks">{legendTicks(max).map(tick => <span key={tick.position} style={{ left: `${tick.position * 100}%` }}>{format(tick.value)}</span>)}</div></div>
-            <div className="legend"><span className="missing-key" /> <span>Unavailable</span><span>Observed: unmarked</span>{mode === 'harmonized' && <><span>• Back-cast estimate</span><span>◆ Gap-filled estimate</span></>}<span>△ Sensor gap flagged</span><span>! Incomplete observations</span><span>N Near-real-time (provisional)</span></div>
-          </section>
-          <section className="panel anomaly-panel" aria-label="Selected-month analysis"><div className="anomaly-title"><h3>Selected-month analysis</h3><span className="month-pill">{selected}</span></div>
-            <p className="anomaly-region">{regionName} · {monthLabel(selected)}</p>
-            <p className="muted anomaly-series">Series used: Harmonized · {period === 'D' ? 'Daytime' : 'Nighttime'}</p>
-            {anomalyRow && !noData && <p className="anomaly-source footnote">{anomalyRow.source === 'backcast' ? '• Selected month is back-cast from MODIS.' : anomalyRow.source === 'gapfill' ? '◆ Selected month is gap-filled from MODIS.' : stats?.value == null ? 'Selected harmonized value is unavailable.' : 'Selected month uses observed VIIRS.'}{anomalyRow.gap_flag ? ' △ Sensor gap flagged.' : ''}</p>}
-            {noData ? <p className="muted">No data in this area</p> : anomalyError ? <p className="field-error" role="alert">{anomalyError}</p> : !stats ? <p className="muted">Loading historical comparison…</p> : <>
-              <div className="comparison"><div><span>Harmonized activity</span><strong>{format(stats.value)}</strong></div><div><span>Historical median</span><strong>{format(stats.historical_median)}</strong></div><div><span>Absolute difference</span><strong>{stats.difference > 0 ? '+' : ''}{format(stats.difference)}</strong></div></div><p className="footnote">active cell-days</p>
-              <div className="anomaly-number">{stats.percent_change == null ? '—' : `${stats.percent_change > 0 ? '+' : ''}${format(stats.percent_change)}%`}</div>
-              <p className="anomaly-caption">{comparisonBlocked(stats) ? 'Comparison withheld: incomplete observations or unavailable coverage metadata.' : stats.historical_median === 0 ? 'Percent change is undefined for a zero baseline.' : stats.value == null ? (period === 'N' && selected < '2012-01' ? 'Nighttime harmonized is unavailable before 2012.' : 'Selected harmonized value unavailable.') : stats.sample_size === 0 ? 'No earlier years available for this month.' : 'relative to the historical monthly median'}</p>
-              <p className="anomaly-rank">{stats.rank == null ? (comparisonBlocked(stats) ? 'Rank withheld' : 'Rank unavailable') : `${stats.rank_tied ? 'Tied rank' : 'Rank'} ${stats.rank} of ${stats.rank_count} ${MONTHS[Number(selected.slice(5))-1]} records`}</p>
-              <p className="footnote">1 = highest. Rank includes this month and the earlier same-calendar-month records; ties share a rank.</p>
-              <p className="footnote baseline-definition">{stats.sample_size} earlier {MONTHS[Number(selected.slice(5))-1]} {stats.sample_size === 1 ? 'record' : 'records'}{stats.sample_size > 0 ? ` (${stats.baseline_years[0]}–${stats.baseline_years.at(-1)})` : ''}. Median uses Harmonized values for this calendar month in earlier years; the target year, unavailable months and known incomplete observations are excluded. The baseline is independent of the displayed date window. Estimates remain included with model uncertainty.</p>
-              {stats.sample_size > 0 && <details className="baseline-years"><summary>Included baseline years</summary><p>{stats.baseline_years.join(', ')}</p></details>}
-            </>}
-            {!noData && <MonthQuality row={anomalyRow} interval={anomaly?.interval}/>}
-          </section>
-        </div>
-        <AreaSummary data={area} loading={areaLoading} error={areaError}/>
-        <div className="csv-row"><div><h3>Export study-area data</h3><p>{regionName} · {start} to {end} · {period === 'D' ? 'Daytime' : 'Nighttime'} · active cell-days</p><p>Harmonized and available raw measurements, date, geographic bounds, provenance, completeness flags and monthly interval bounds. Unavailable values remain blank.</p></div><button className="export" title="Export all measurements and geographic selection metadata" onClick={download} disabled={!series || loading || downloading}>{downloading ? 'Preparing…' : 'Download CSV'}</button></div>
-        </div>
-      </section>
-      <footer><span>0.1° GRID · WGS84 · UTC</span><span>Calibration: {meta?.calibration || 'loading'}{synthetic ? ' · Synthetic demonstration' : ''}</span></footer>
-    </main>
+      <main className="stage" aria-label="Map and analyses">
+        <section className="map-pane" aria-labelledby="map-title">
+          <div className="pane-head"><h2 id="map-title" className="pane-title">{LABELS[metric]} active cell-days per 0.1° cell, {monthLabel(selected)}, {periodName.toLowerCase()}</h2>
+            <span className="map-stats">{grid?.available ? <>{format(grid.count)} active cells · {format(grid.total)} cell-days nationally{grid.source && grid.source !== 'observed' ? ` · ${grid.source === 'backcast' ? 'back-cast' : 'gap-filled'} estimate: cells follow the MODIS footprint` : ''}{grid.nrt ? ' · provisional NRT' : ''}{grid.gap_flag ? ' · sensor gap flagged' : ''}</> : ''}</span></div>
+          <div className="map-container">{meta ? <RegionMap bounds={bounds} onSelect={applyBounds} coverage={meta.coverage} grid={grid}/> : <div className="map-shell empty">Loading Argentina coverage…</div>}</div>
+          <div className="map-legend">
+            {grid?.available && grid.count > 0 ? <div className="heat-scale" aria-label="Map colour scale"><span>Active cell-days in one 0.1° cell · square-root cividis scale</span><div className="heat-ramp" style={{ background: `linear-gradient(to right, ${CIVIDIS.join(',')})` }}/><div className="heat-ticks">{legendTicks(grid.max).map(tick => <span key={tick.position} style={{ left: `${tick.position * 100}%` }}>{format(tick.value)}</span>)}</div></div>
+              : <p className="muted">{gridError || (grid && !grid.available ? `${LABELS[metric]} values are unavailable for ${monthLabel(selected)} (${periodName.toLowerCase()}); missing is not zero.` : grid ? 'No active cells this month.' : 'Loading map layer…')}</p>}
+            <p className="figure-caption"><span><b>Source</b> Harmonized Parquet cells (/grid), {LABELS[metric]}</span><span><b>Period</b> {selected || '…'}, {periodName.toLowerCase()} overpasses</span></p>
+          </div>
+        </section>
+        <Timeline rows={rows} metric={metric} metricLabel={LABELS[metric]} selected={selected} onSelect={setSelected} loading={loading} regionName={regionName} periodName={periodName.toLowerCase()}/>
+        <section className="analysis" aria-label="Analyses">
+          <Tabs items={TABS} active={tab} onChange={setTab} label="Analyses" className="analysis-tabs"/>
+          <div className="analysis-body" id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>
+            {tab === 'calendar' && <CalendarPanel rows={rows} metric={metric} mode={mode} period={period} selected={selected} onSelect={setSelected} loading={loading} noData={noData} nightUnavailable={nightUnavailable} hasHarmonized={meta?.has_harmonized} synthetic={synthetic} start={start} end={end}/>}
+            {tab === 'seasons' && <SeasonComparison series={period === 'D' ? daytime : seasonNight} loading={period === 'D' ? dayLoading : seasonLoading} error={period === 'D' ? dayError : seasonError} start={meta?.start} end={latestMonth} regionName={regionName} period={period} onPeriodChange={setPeriod}/>}
+            {tab === 'record' && <div id="history"><WhyHarmonize data={area} loading={areaLoading} error={areaError} monthly={daytime} monthlyLoading={dayLoading} monthlyError={dayError} regionName={regionName} compact /><AreaSummary data={area} loading={areaLoading} error={areaError}/></div>}
+            {tab === 'trend' && <TimingTrend series={daytime} regionName={regionName} loading={dayLoading} error={dayError}/>}
+            {tab === 'regions' && <RegionalComparison regions={regions}/>}
+            {tab === 'sensors' && <div id="satellites"><SensorComparison daytime={daytime} loading={dayLoading} error={dayError} meta={meta} bounds={bounds} regionName={regionName} retry={retry} getJSON={getJSON}/></div>}
+          </div>
+        </section>
+      </main>
+
+      <aside className="inspector" aria-label="Selected month">
+        <Inspector anomaly={anomaly} anomalyError={anomalyError} selected={selected} period={period} regionName={regionName} noData={noData}/>
+      </aside>
+    </div>}
+
+    {view !== 'explore' && <main className="doc-view" id={`panel-${view}`} role="tabpanel" aria-labelledby={`tab-${view}`}>
+      <div className="doc-inner">
+        {view === 'about' && <Hero meta={meta} latestMonth={latestMonth} national={national} validation={validation} onOpen={openView}/>}
+        {view === 'validation' && <section id="validation" aria-labelledby="validation-title"><h1 id="validation-title">Testing the calibration on years it never saw</h1><p className="lede">MODIS was calibrated to VIIRS on 2012–2019 and tested on later years held out of fitting. Scores are national; VIIRS is the reference instrument, not ground truth.</p><MethodPanel validation={validation} calibration={meta?.calibration}/></section>}
+        {view === 'methods' && <section id="method" aria-labelledby="method-title"><h1 id="method-title">How the two records are put on one scale</h1><p className="lede">A calibration experiment: fit competing models on the years both satellites flew, choose one on held-out years, then use it only where VIIRS has no observations.</p><MethodSteps meta={meta} validation={validation}/></section>}
+        {view === 'data' && <section id="data" aria-labelledby="data-title"><h1 id="data-title">Data sources</h1><p className="lede">Every value starts as a NASA FIRMS active-fire detection: a pixel where a satellite measured more heat than its surroundings.</p><DataSources validation={validation} meta={meta}/></section>}
+        {view === 'limitations' && <section id="limitations" aria-labelledby="limitations-title"><h1 id="limitations-title">What this method cannot do yet</h1><p className="lede">These limits come from the validation results and diagnostics. Each marks where the record should be read with care, with the next step that would address it.</p><Limitations validation={validation} meta={meta}/></section>}
+      </div>
+      <footer className="site-footer">
+        <p><b>Data</b> NASA FIRMS active fire: MODIS Collection 6.1 (Aqua, Terra) and VIIRS 375 m Collection 2 (Suomi-NPP, NOAA-20). Boundaries: Natural Earth. Basemap: OpenStreetMap contributors.</p>
+        <p><b>Record</b> 0.1° grid · WGS84 · UTC · Calibration: {meta?.calibration || 'loading'}{meta?.contract && meta.contract !== 'unspecified' ? ` · ${meta.contract}` : ''}{synthetic ? ' · Synthetic demonstration' : ''}</p>
+      </footer>
+    </main>}
   </div>;
 }

@@ -1,26 +1,34 @@
 import { test, expect } from '@playwright/test';
+import { openTab, openView } from './helpers.js';
 const fmt = value => value == null ? 'Unavailable' : new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(value);
 const key = row => `${row.year}-${String(row.month).padStart(2, '0')}`;
 
-test('four ordered sections share a region and show file-backed validation', async ({ page, request }) => {
+test('views and analysis tabs share one study area and show file-backed validation', async ({ page, request }) => {
+  test.setTimeout(90000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   const meta = await (await request.get('/api/meta')).json();
   const validation = await (await request.get('/api/validation')).json();
   await page.goto('/');
-  await expect(page.locator('main .page-section')).toHaveCount(4);
-  await expect(page.locator('.page-section-heading h2')).toHaveText(['Choose your study area.','Compare the Satellites','Making satellite observations comparable','Explore historical burning activity']);
+  await expect(page.getByRole('tablist', { name: 'Views' }).getByRole('tab')).toHaveText(['Explore','Validation','Methods','Data','Limitations','About']);
+  await expect(page.getByRole('tablist', { name: 'Analyses' }).getByRole('tab')).toHaveText(['Calendar','Seasons','Annual record','Timing & trend','Regions','Raw sensors']);
   await expect(page.locator('.synthetic-banner')).toHaveCount(meta.synthetic ? 1 : 0);
   await expect(page.getByLabel('End month')).toHaveValue(meta.end);
+  await openTab(page, 'Raw sensors');
   await expect(page.getByText('MODIS and VIIRS observe the same burning activity with different detection capabilities. Their raw hotspot measurements cannot be compared directly without accounting for these differences.', { exact:true })).toBeVisible();
   await expect(page.locator('.raw-chart')).toHaveCount(2);
+  await openTab(page, 'Annual record');
   await expect(page.locator('#history .annual-join')).toContainText('2012: instrument transition');
+  await openView(page, 'Validation');
   await expect(page.locator('.compact-scores tbody tr')).toHaveCount(validation.periods.length);
   for (const period of validation.periods) await expect(page.locator('.compact-scores tbody')).toContainText(period.label);
+  await openView(page, 'Limitations');
   await expect(page.locator('.drift-notice')).toContainText('Aqua overpass drift since 2023');
   await expect(page.locator('.limitation-list details')).toHaveCount(validation.known_limitations.length);
   await expect(page.locator('.night-note')).toHaveText('Harmonized nighttime activity uses VIIRS only from 2012; it is not back-cast.');
-  await page.screenshot({ path:'test-results/four-sections-desktop.png', fullPage:true });
+  await openView(page, 'Explore');
+  await page.screenshot({ path:'test-results/workspace-desktop.png' });
+  await openTab(page, 'Annual record');
   for (const [name, bbox] of [['Gran Chaco','-64,-28,-59,-24'], ['Pampas','-64,-38,-59,-33'], ['Patagonia','-71,-50,-67,-40']]) {
     const loaded = page.waitForResponse(r => r.url().includes('/area-summary?') && new URL(r.url()).searchParams.get('bbox') === bbox);
     const rawLoaded = page.waitForResponse(r => r.url().includes('/series?') && new URL(r.url()).searchParams.get('bbox') === bbox && new URL(r.url()).searchParams.get('daynight') === 'D');
@@ -30,7 +38,7 @@ test('four ordered sections share a region and show file-backed validation', asy
     await expect(page.locator('.study-area-name')).toContainText(name);
     await expect(page.locator('.top-years li strong').first()).toHaveText(fmt(area.top_years[0].harmonized));
     await expect(page.locator('.annual-chart')).toBeVisible();
-    await expect(page.locator('.calendar-scroll')).toHaveAttribute('aria-busy','false');
+    await expect(page.locator('.timeline-track')).toBeVisible();
     await expect(page.locator('.summary strong')).not.toHaveText(/^(0|—|No data in this area)$/);
   }
   await page.getByText('Custom coordinates', {exact:true}).click();
@@ -39,9 +47,11 @@ test('four ordered sections share a region and show file-backed validation', asy
   await page.getByLabel('South latitude').fill('0');
   await page.getByLabel('North latitude').fill('1');
   await page.getByRole('button', {name:/Update study area/}).click();
-  await expect(page.locator('.calendar-scroll')).toContainText('No data in this area');
-  await expect(page.locator('.raw-chart-card .raw-empty')).toHaveText(['No data in this area','No data in this area']);
   await expect(page.locator('#history .empty')).toContainText('No data in this area');
+  await openTab(page, 'Calendar');
+  await expect(page.locator('.calendar-scroll')).toContainText('No data in this area');
+  await openTab(page, 'Raw sensors');
+  await expect(page.locator('.raw-chart-card .raw-empty')).toHaveText(['No data in this area','No data in this area']);
   expect(errors).toEqual([]);
 });
 
@@ -51,11 +61,13 @@ test('raw charts share y scale and hover, and offer full-record daytime data ind
   const data = (await (await request.get(`/api/series?${params}`)).json()).data;
   const maximum = Math.max(1,...data.flatMap(r => [r.raw_modis || 0,r.raw_viirs || 0]));
   await page.goto('/');
+  await openTab(page, 'Raw sensors');
   await page.getByLabel('Sensor comparison range').selectOption('full');
   const charts = page.locator('.raw-chart');
   await expect(charts).toHaveCount(2);
   for (const chart of await charts.all()) await expect(chart).toHaveAttribute('data-y-max', String(maximum));
   await expect(page.locator('.raw-chart-card').first().getByRole('heading')).toHaveText('Raw MODIS Aqua');
+  await charts.first().scrollIntoViewIfNeeded();
   const rect = await charts.first().boundingBox();
   await page.mouse.move(rect.x+rect.width*.6, rect.y+rect.height*.5);
   const month = await charts.first().locator('.chart-cursor').getAttribute('data-month');
@@ -69,10 +81,15 @@ test('raw charts share y scale and hover, and offer full-record daytime data ind
   await page.getByLabel('Inspect satellite month').focus();
   await page.keyboard.press('Home');
   await expect(page.locator('.raw-hover strong').nth(1)).toHaveText('Unavailable');
+  // Narrowing the explorer window and switching to night does not change the raw full-record charts.
   await page.getByLabel('End month').fill('2011-12');
   await page.getByLabel('Day or night').selectOption('N');
+  await openTab(page, 'Calendar');
   await expect(page.locator('.calendar-scroll')).toContainText('Nighttime harmonized is unavailable before 2012');
+  await openTab(page, 'Raw sensors');
+  await page.getByLabel('Sensor comparison range').selectOption('full');
   for (const chart of await charts.all()) await expect(chart).toHaveAttribute('data-y-max',String(maximum));
+  await openTab(page, 'Annual record');
   await expect(page.locator('#history .annual-join')).toBeVisible();
 });
 
@@ -85,7 +102,7 @@ test('Explore harmonized anomaly, ranks, source flags and selected-series CSV', 
   await expect(page.getByRole('button',{name:'Harmonized',exact:true})).toHaveAttribute('aria-pressed','true');
   await expect(page.locator('.summary strong')).toHaveText(fmt(series.data.reduce((sum,r)=>sum+(r.harmonized||0),0)));
   const max = Math.max(...series.data.map(r=>r.harmonized||0));
-  await expect(page.locator('.heat-ticks span').nth(2)).toHaveText(fmt(max*.25));
+  await expect(page.locator('.calendar-panel .heat-ticks span').nth(2)).toHaveText(fmt(max*.25));
   const cell = page.getByRole('button',{name:/Jan 2012:/});
   await cell.click();
   await expect(page.locator('.anomaly-panel .comparison strong').nth(0)).toHaveText(fmt(stats.value));
@@ -110,22 +127,25 @@ test('Explore harmonized anomaly, ranks, source flags and selected-series CSV', 
   await expect(page.locator('.anomaly-rank')).toContainText('1 of 1');
   await page.getByRole('button',{name:/Aug 2024:/}).click();
   await expect(page.locator('.anomaly-source')).toContainText('observed VIIRS');
+  await openTab(page, 'Annual record');
   await expect(page.locator('.top-years li')).toHaveCount(5);
   await expect(page.locator('.peak-month strong')).not.toBeEmpty();
 });
 
 test('map drawing and narrow layout work, validation has missing-file placeholders', async ({page}) => {
   await page.route('**/api/validation',route=>route.fulfill({json:{status:'pending',message:'Awaiting out/validation.json',metrics:[]}}));
-  await page.goto('/');
+  await page.goto('/?view=validation');
   await expect(page.locator('.validation-placeholder strong')).toHaveText(['—','—','—']);
   await expect(page.getByText('Awaiting out/validation.json')).toBeVisible();
   await page.unroute('**/api/validation');
   await page.reload();
   await expect(page.locator('.validation-summary')).toBeVisible();
+  await openView(page, 'Explore');
   const canvas = page.locator('.maplibregl-canvas');
   await expect(canvas).toBeVisible();
   const previous = await page.getByLabel('West longitude').inputValue();
   await page.getByRole('button',{name:/Select area on map/}).click();
+  await canvas.scrollIntoViewIfNeeded();
   const rect = await canvas.boundingBox();
   await page.mouse.move(rect.x+rect.width*.3,rect.y+rect.height*.35);
   await page.mouse.down();
@@ -134,11 +154,11 @@ test('map drawing and narrow layout work, validation has missing-file placeholde
   await expect(page.getByLabel('West longitude')).not.toHaveValue(previous);
   await page.getByRole('button',{name:'Gran Chaco',exact:true}).click();
   await page.setViewportSize({width:390,height:844});
-  await expect(page.getByRole('heading',{name:'Explore historical burning activity',exact:true})).toBeVisible();
+  await expect(page.locator('.map-pane')).toBeVisible();
+  await expect(page.getByRole('tablist', { name: 'Analyses' })).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
-  for (const id of ['where','satellites','history','explore']) await page.locator(`#${id}`).screenshot({path:`test-results/four-sections-mobile-${id}.png`});
+  for (const part of ['stage','inspector','controls']) await page.locator(`.${part}`).screenshot({path:`test-results/workspace-mobile-${part}.png`});
 });
-
 
 test('live October default, incomplete months, July estimate and NRT remain distinct', async ({page,request}) => {
   const meta = await (await request.get('/api/meta')).json();
@@ -168,7 +188,7 @@ test('live October default, incomplete months, July estimate and NRT remain dist
   await expect(page.locator('.prediction-interval')).toContainText('70.1%');
   await expect(page.locator('.month-limitations')).toContainText('drift-period estimate');
   await expect(page.locator('.anomaly-rank')).not.toHaveText('Rank withheld');
-  await page.screenshot({path:'test-results/july-estimate-desktop.png',fullPage:true});
+  await page.screenshot({path:'test-results/july-estimate-desktop.png'});
   await page.getByLabel('Day or night').selectOption('N');
   await expect(page.locator('.anomaly-rank')).toHaveText('Rank withheld');
   await expect(page.locator('.provenance-badges')).toContainText('Observed · Incomplete');
@@ -191,47 +211,45 @@ test('live October default, incomplete months, July estimate and NRT remain dist
   for(const column of ['source','nrt','incomplete','missing_snpp_days','lo80','hi80']) expect(header).toContain(column);
 });
 
-test('study-area introduction, responsive map and metadata dates', async ({page}) => {
+test('about view, study-area controls, responsive workspace and metadata dates', async ({page}) => {
   await page.goto('/');
-  await expect(page.locator('.brand')).toContainText('HOTSPOT OBSERVATORY');
+  await expect(page.locator('.brand')).toContainText('Hotspot Observatory');
   await expect(page.locator('.brand small')).toHaveText('Harmonized satellite fire history');
-  await expect(page.locator('header')).not.toContainText('Selected area');
-  await expect(page.getByRole('heading',{level:1})).toHaveText('Harmonized fire activity from MODIS and VIIRS');
-  await expect(page.locator('.hero-subhead')).toHaveText("Explore decades of satellite-detected fire activity through a unified historical record. Compare burning patterns across regions, seasons, and years, identify unusual activity, and investigate long-term trends using NASA observations calibrated for differences between satellite instruments.");
-  await expect(page.locator('.hero-note')).toHaveText('Current coverage: Argentina, 2003–2026 · More regions planned');
-  await expect(page.locator('.measurement-explanation p')).not.toBeVisible();
-  await page.getByText('Data and methods', {exact:true}).click();
-  await expect(page.locator('.measurement-explanation p')).toContainText('0.1° geographic grid cells');
-  await expect(page.locator('.measurement-explanation p')).toContainText('The same cell can count again on another day.');
-  await page.getByText('Data and methods', {exact:true}).click();
-  await expect(page.locator('.section-nav a')).toHaveText(['Study Area','Compare Sensors','Harmonization','Fire History']);
-  await expect(page.locator('#where .page-section-heading p')).toHaveText('Select a region or define your own area to explore NASA satellite observations.');
   await expect(page.locator('.presets button')).toHaveText(['All Argentina','Gran Chaco','Pampas','Patagonia']);
   await expect(page.locator('.study-area-name')).toHaveText('All Argentina');
   await expect(page.locator('.historical-record')).toHaveText('Historical record: January 2003 - October 2026');
   await expect(page.getByLabel('West longitude')).not.toBeVisible();
   await expect(page.locator('.small-area-warning')).toBeVisible();
-  await expect(page.locator('.raw-chart')).toHaveCount(2);
-  await page.screenshot({path:'test-results/study-area-desktop.png',fullPage:true});
-  await page.locator('#where').screenshot({path:'test-results/argentina-map-desktop.png'});
+  await openView(page, 'About');
+  await expect(page.getByRole('heading',{level:1})).toHaveText('Did fire activity in Argentina jump in 2012, or did the satellite change?');
+  // The ratio quoted on the About view comes from validation metadata, not fixed copy.
+  const validation = await (await page.request.get('/api/validation')).json();
+  await expect(page.locator('.hero-subhead')).toContainText(`VIIRS recorded ${new Intl.NumberFormat('en-US',{maximumFractionDigits:2}).format(validation.model_a_ratio)} times as many active cell-days`);
+  await expect(page.locator('.hero-note')).toHaveText('Current coverage: Argentina, 2003–2026 · More regions planned');
+  await expect(page.locator('.measurement-explanation p')).not.toBeVisible();
+  await page.getByText('Data and methods', {exact:true}).click();
+  await expect(page.locator('.measurement-explanation p')).toContainText('0.1° geographic grid cells');
+  await expect(page.locator('.measurement-explanation p')).toContainText('The same cell can count again on another day.');
+  await page.screenshot({path:'test-results/about-desktop.png'});
+  await openView(page, 'Data');
+  await expect(page).toHaveURL(/view=data/);
+  await expect(page.getByRole('heading',{level:1})).toHaveText('Data sources');
+  await openView(page, 'Explore');
   await page.setViewportSize({width:390,height:844});
   await expect(page.getByRole('button',{name:'Select area on map',exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
-  await page.locator('#where').screenshot({path:'test-results/argentina-map-mobile.png'});
-  // Section 01 is captured above; avoid an oversized full-page software-renderer image.
-  await page.screenshot({path:'test-results/study-area-mobile.png'});
+  await page.screenshot({path:'test-results/workspace-mobile.png'});
   await page.getByText('Custom coordinates',{exact:true}).click();
   await expect(page.getByLabel('West longitude')).toBeVisible();
   await expect(page.getByRole('button',{name:'Update study area',exact:true})).toBeVisible();
-  await page.getByRole('link',{name:'Next: Compare satellite observations',exact:true}).click();
-  await expect(page).toHaveURL(/#satellites$/);
-  // The record follows metadata, not the machine clock or fixed hero copy.
+  // The record follows metadata, not the machine clock or fixed copy.
   await page.route('**/api/meta', async route => {
     const response=await route.fetch();
     await route.fulfill({json:{...await response.json(), latest_complete_month:'2025-09'}});
   });
-  await page.reload();
+  await page.goto('/');
   await expect(page.locator('.historical-record')).toHaveText('Historical record: January 2003 - September 2025');
   await expect(page.getByLabel('End month')).toHaveValue('2025-09');
+  await openView(page, 'About');
   await expect(page.locator('.hero-note')).toHaveText('Current coverage: Argentina, 2003–2025 · More regions planned');
 });

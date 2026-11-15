@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openTab, openView } from './helpers.js';
 import { readFile } from 'node:fs/promises';
 import { parseCsv } from '../src/exportCsv.js';
 const fmt = value => value == null ? '—' : new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(value);
@@ -9,10 +10,9 @@ test('calendar selection shows harmonized comparisons, region, provenance and co
   const stats = response.data[0].metrics.harmonized;
   await page.goto('/');
   await page.getByRole('button', { name: 'Gran Chaco', exact: true }).click();
-  const section = page.locator('#explore');
-  await expect(section.getByRole('heading', { level: 2 })).toHaveText('Explore historical burning activity');
-  await expect(section.locator('.explore-context')).toContainText('Gran Chaco');
-  await expect(section.locator('.explore-context')).toContainText('January 2003 – October 2026');
+  const section = page.locator('.workspace');
+  await expect(section.locator('.study-area-name')).toHaveText('Gran Chaco');
+  await expect(section.locator('.historical-record')).toContainText('January 2003 - October 2026');
   await expect(page.getByLabel('Day or night', { exact: true })).toHaveValue('D');
   await expect(section.getByRole('button', { name: 'Harmonized', exact: true })).toHaveAttribute('aria-pressed', 'true');
   const july = section.getByRole('button', { name: /^Jul 2026:/ });
@@ -29,14 +29,12 @@ test('calendar selection shows harmonized comparisons, region, provenance and co
   await expect(section.locator('.baseline-definition')).toContainText('unavailable months and known incomplete observations are excluded');
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1100 });
-    await page.getByRole('link', { name: 'Fire History', exact: true }).click();
-    await expect.poll(() => section.evaluate(el => Math.abs(el.getBoundingClientRect().top - document.querySelector('.topbar').getBoundingClientRect().bottom - 16))).toBeLessThan(3);
     const calendar = await section.locator('.calendar-panel').boundingBox();
     const panel = await section.locator('.anomaly-panel').boundingBox();
     if (width > 900) expect(panel.x).toBeGreaterThan(calendar.x + calendar.width);
     else expect(panel.y).toBeGreaterThanOrEqual(calendar.y + calendar.height);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await section.screenshot({ path: `test-results/history-workspace-${width}.png` });
+    await page.screenshot({ path: `test-results/history-workspace-${width}.png` });
   }
   const march = section.getByRole('button', { name: /^Mar 2026:/ });
   await expect(march).toHaveAttribute('title', /Observed VIIRS · Incomplete observations/);

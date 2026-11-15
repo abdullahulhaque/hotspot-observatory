@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { CIVIDIS } from './heatScale.js';
 
 function polygon(bounds) {
   const [w, s, east, n] = bounds;
@@ -8,10 +9,29 @@ function polygon(bounds) {
   return { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] } };
 }
 const wrap = lon => ((lon + 180) % 360 + 360) % 360 - 180;
+const EMPTY = { type: 'FeatureCollection', features: [] };
+// Each 0.1° cell is drawn as its true footprint, coloured on the same square-root
+// cividis scale as the calendar so both views read the same way.
+export function cellFeatures(cells, maximum) {
+  if (!cells?.length || !(maximum > 0)) return EMPTY;
+  return { type: 'FeatureCollection', features: cells.map(([lon, lat, value, source]) => ({ type: 'Feature',
+    properties: { v: value, p: Math.sqrt(Math.min(1, value / maximum)), s: source },
+    geometry: { type: 'Polygon', coordinates: [[[lon - .05, lat - .05], [lon + .05, lat - .05], [lon + .05, lat + .05], [lon - .05, lat + .05], [lon - .05, lat - .05]]] } })) };
+}
+const RAMP = ['interpolate', ['linear'], ['get', 'p'], ...CIVIDIS.flatMap((color, i) => [i / (CIVIDIS.length - 1), color])];
+// Below zoom 6 a 0.1° square is under a pixel wide, so cells are also drawn as dots
+// whose size grows with zoom; from zoom 6 the true cell squares take over.
+export function cellPoints(cells, maximum) {
+  if (!cells?.length || !(maximum > 0)) return EMPTY;
+  return { type: 'FeatureCollection', features: cells.map(([lon, lat, value, source]) => ({ type: 'Feature',
+    properties: { v: value, p: Math.sqrt(Math.min(1, value / maximum)), s: source }, geometry: { type: 'Point', coordinates: [lon, lat] } })) };
+}
 
-export default function Map({ bounds, onSelect, coverage }) {
+export default function Map({ bounds, onSelect, coverage, grid }) {
   const container = useRef(null), map = useRef(null), selection = useRef(onSelect), current = useRef(bounds);
-  const [drawing, setDrawing] = useState(false), [notice, setNotice] = useState('');
+  const [drawing, setDrawing] = useState(false), [notice, setNotice] = useState(''), [hovered, setHovered] = useState(null);
+  const gridRef = useRef(grid);
+  gridRef.current = grid;
   const coverageRef = useRef(coverage), initialBounds = useRef(bounds);
   coverageRef.current = coverage;
   selection.current = onSelect;
@@ -26,8 +46,8 @@ export default function Map({ bounds, onSelect, coverage }) {
         // A local style still renders the selection if the optional basemap is offline.
         style: { version: 8, sources: { basemap: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 19,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' } },
-          layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#1b2730' } },
-            { id: 'basemap', type: 'raster', source: 'basemap', paint: { 'raster-saturation': -1, 'raster-brightness-max': 0.8, 'raster-fade-duration': 0 } }] },
+          layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#E6EAED' } },
+            { id: 'basemap', type: 'raster', source: 'basemap', paint: { 'raster-saturation': -1, 'raster-opacity': 0.55, 'raster-contrast': -0.2, 'raster-fade-duration': 0 } }] },
       });
     } catch {
       setNotice('Map unavailable. Select your region with the latitude / longitude inputs.');
@@ -51,14 +71,23 @@ export default function Map({ bounds, onSelect, coverage }) {
         const mask = { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [world, ...polygons.map(p => p[0])] } };
         instance.addSource('coverage', { type: 'geojson', data: boundary });
         instance.addSource('coverage-mask', { type: 'geojson', data: mask });
-        instance.addLayer({ id: 'outside-coverage', type: 'fill', source: 'coverage-mask', paint: { 'fill-color': '#101a22', 'fill-opacity': .78 } });
-        instance.addLayer({ id: 'coverage-outline', type: 'line', source: 'coverage', paint: { 'line-color': '#719b99', 'line-width': 1.5 } });
+        instance.addLayer({ id: 'outside-coverage', type: 'fill', source: 'coverage-mask', paint: { 'fill-color': '#DDE2E6', 'fill-opacity': .82 } });
+        instance.addLayer({ id: 'coverage-outline', type: 'line', source: 'coverage', paint: { 'line-color': '#4C5866', 'line-width': 1.2 } });
+      }
+      instance.addSource('activity', { type: 'geojson', data: cellFeatures(gridRef.current?.cells, gridRef.current?.max) });
+      instance.addSource('activity-points', { type: 'geojson', data: cellPoints(gridRef.current?.cells, gridRef.current?.max) });
+      instance.addLayer({ id: 'activity', type: 'fill', source: 'activity', minzoom: 6, paint: { 'fill-color': RAMP, 'fill-opacity': 0.92, 'fill-antialias': false } }, boundary ? 'outside-coverage' : undefined);
+      instance.addLayer({ id: 'activity-points', type: 'circle', source: 'activity-points', maxzoom: 6, paint: { 'circle-color': RAMP, 'circle-opacity': 0.9,
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 1.1, 4, 1.8, 5, 2.6, 6, 4] } }, boundary ? 'outside-coverage' : undefined);
+      for (const layer of ['activity', 'activity-points']) {
+        instance.on('mousemove', layer, event => { const f = event.features?.[0]; if (f) setHovered({ v: f.properties.v, s: f.properties.s, lon: f.geometry.type === 'Point' ? f.geometry.coordinates[0] : event.lngLat.lng, lat: f.geometry.type === 'Point' ? f.geometry.coordinates[1] : event.lngLat.lat }); });
+        instance.on('mouseleave', layer, () => setHovered(null));
       }
       instance.addSource('selection', { type: 'geojson', data: polygon(current.current) });
       // Keep the coverage mask above the highlight so a bounding box never implies
       // that observations are available in neighbouring countries.
-      instance.addLayer({ id: 'selection-fill', type: 'fill', source: 'selection', paint: { 'fill-color': '#b6c7d4', 'fill-opacity': 0.08 } }, boundary ? 'outside-coverage' : undefined);
-      instance.addLayer({ id: 'selection-outline', type: 'line', source: 'selection', paint: { 'line-color': '#d0dbe3', 'line-width': 1.5, 'line-dasharray': [3, 2] } });
+      instance.addLayer({ id: 'selection-fill', type: 'fill', source: 'selection', paint: { 'fill-color': '#1D5C8C', 'fill-opacity': 0.04 } }, boundary ? 'outside-coverage' : undefined);
+      instance.addLayer({ id: 'selection-outline', type: 'line', source: 'selection', paint: { 'line-color': '#16222E', 'line-width': 1.6, 'line-dasharray': [3, 2] } });
     });
     return () => { resize.disconnect(); map.current = null; instance.remove(); };
   }, []);
@@ -71,6 +100,12 @@ export default function Map({ bounds, onSelect, coverage }) {
     const [w, s, e, n] = bounds;
     instance.fitBounds([[w, s], [e < w ? e + 360 : e, n]], { padding: { top: 76, bottom: 76, left: 30, right: 30 }, maxZoom: 8, duration: 0 });
   }, [bounds]);
+
+  useEffect(() => {
+    map.current?.getSource('activity')?.setData(cellFeatures(grid?.cells, grid?.max));
+    map.current?.getSource('activity-points')?.setData(cellPoints(grid?.cells, grid?.max));
+    setHovered(null);
+  }, [grid]);
 
   useEffect(() => {
     const instance = map.current;
@@ -125,7 +160,7 @@ export default function Map({ bounds, onSelect, coverage }) {
     <div className="map-toolbar"><span className="map-tag">Argentina coverage</span>
       <button className={drawing ? 'draw active' : 'draw'} onClick={() => setDrawing(value => !value)} aria-pressed={drawing}>
         <span aria-hidden="true">▧</span> {drawing ? 'Cancel drawing' : 'Select area on map'}</button></div>
-    <div className="map-caption" aria-live="polite">{drawing ? 'Drag to select a rectangle · Esc to cancel' : <><span className="coverage-key">Argentina data coverage</span><span className="selection-key">Selected bounding box</span><span>Outside coverage dimmed</span></>}</div>
+    <div className={`map-caption${drawing || hovered ? ' active' : ''}`} aria-live="polite">{drawing ? 'Drag to select a rectangle · Esc to cancel' : hovered ? <span>{hovered.v.toLocaleString('en', { maximumFractionDigits: 1 })} active cell-days in the cell near {Math.abs(hovered.lat).toFixed(2)}° S, {Math.abs(hovered.lon).toFixed(2)}° W{hovered.s !== 'observed' ? ` · ${hovered.s === 'backcast' ? 'back-cast' : 'gap-filled'} estimate` : ''}</span> : <><span className="coverage-key">Argentina data coverage</span><span className="selection-key">Selected bounding box</span><span>Outside coverage dimmed</span></>}</div>
     {notice && <div className="map-notice" role="status">{notice}</div>}
   </div>;
 }

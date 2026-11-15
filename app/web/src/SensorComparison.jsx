@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import SensorChart, { monthKey } from './SensorChart.jsx';
+import Figure from './Figure.jsx';
 import { qualityLabel } from './provenance.js';
 import { rawComparison } from './rawComparison.js';
 
@@ -54,7 +55,6 @@ export default function SensorComparison({ daytime, loading, error, meta, bounds
   const month = rows.some(row => monthKey(row) === hoveredMonth) ? hoveredMonth : rows.length ? monthKey(rows[rows.length - 1]) : '';
   const index = Math.max(0, rows.findIndex(row => monthKey(row) === month));
   return <>
-    <div className="page-section-heading"><span>02</span><h2 id="satellites-title">Compare the Satellites</h2><p>Different instruments · shared study area</p></div>
     <table className="instrument-comparison" aria-label="Instrument comparison">
       <thead><tr><th scope="col">Instrument</th><th scope="col" className="modis-instrument">MODIS Aqua</th><th scope="col" className="viirs-instrument">VIIRS S-NPP</th></tr></thead>
       <tbody>
@@ -67,8 +67,13 @@ export default function SensorComparison({ daytime, loading, error, meta, bounds
     <div className="sensor-observation-controls"><div><h3>Raw observations</h3><p>{regionName} · {rows.length ? monthKey(rows[0]) : '…'} to {rows.length ? monthKey(rows.at(-1)) : '…'}</p></div><label>Comparison range<select aria-label="Sensor comparison range" value={range} onChange={event => setRange(event.target.value)}><option value="overlap">Overlap (2012 onward)</option><option value="full">Full MODIS record</option></select></label><label>Observation period<select aria-label="Sensor observation period" value={period} onChange={event => setPeriod(event.target.value)}><option value="D">Daytime</option><option value="N">Nighttime</option></select></label></div>
     <p className="sensor-units">Monthly {period === 'D' ? 'daytime' : 'nighttime'} active cell-days · matching axes · missing observations are unavailable</p>
     {series?.synthetic && <p className="quality-notice" role="status">Synthetic development data — not NASA observations.</p>}
+    <Figure className="raw-figure" title={`Raw monthly ${period === 'D' ? 'daytime' : 'nighttime'} observations from each instrument, on the same axes`}
+      source="NASA FIRMS MODIS C6.1 (Aqua) and VIIRS 375 m C2 (S-NPP); filtered, gridded to active 0.1° cell-days; not calibrated"
+      period={rows.length ? `${monthKey(rows[0])} to ${monthKey(rows.at(-1))} · ${regionName}` : 'Loading…'}
+      note="VIIRS did not exist before 2012; those months are missing, not zero.">
     <div className="raw-chart-pair">{['raw_modis', 'raw_viirs'].map(metric => <SensorChart key={metric} metric={metric} series={series} loading={period === 'D' ? loading : nightLoading} error={period === 'D' ? error : nightError} maximum={maximum} hoveredMonth={month} onHover={setHoveredMonth} period={period}/>)}</div>
     {rows.length > 0 && series?.has_data && <label className="linked-hover-control">Hover either chart to compare the same month, or use the slider: <strong>{month}</strong><input type="range" aria-label="Inspect satellite month" min="0" max={rows.length - 1} value={index} onChange={event => setHoveredMonth(monthKey(rows[Number(event.target.value)]))}/></label>}
+    </Figure>
     <ObservationComparison row={rows[index]} regionName={regionName} period={period} loading={activeLoading} error={activeError} hasData={series?.has_data}/>
     <p className="sensor-caution">MODIS and VIIRS observe the same burning activity with different detection capabilities. Their raw hotspot measurements cannot be compared directly without accounting for these differences.</p>
   </>;
