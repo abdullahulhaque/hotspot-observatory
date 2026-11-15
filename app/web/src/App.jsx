@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import MonthQuality from './MonthQuality.jsx';
-import { qualityLabel, comparisonBlocked } from './provenance.js';
+import { comparisonBlocked } from './provenance.js';
 import SectionNav from './SectionNav.jsx';
 import SeasonComparison from './SeasonComparison.jsx';
 import RegionMap from './Map.jsx';
@@ -9,6 +9,7 @@ import MethodPanel from './MethodPanel.jsx';
 import AreaSummary from './AreaSummary.jsx';
 import WhyHarmonize from './WhyHarmonize.jsx';
 import { CIVIDIS, heatColor, legendTicks } from './heatScale.js';
+import { withSelection } from './exportCsv.js';
 
 const API = import.meta.env.VITE_API_BASE || '/api';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -137,10 +138,11 @@ export default function App() {
   async function download() {
     setDownloading(true);
     try {
-      const response = await fetch(`${API}/export.csv?${query}&metric=${metric}`);
+      const response = await fetch(`${API}/export.csv?${query}&metric=all`);
       if (!response.ok) throw new Error(`CSV export failed (${response.status}).`);
-      const url = URL.createObjectURL(await response.blob());
-      const anchor = document.createElement('a'); anchor.href = url; anchor.download = `hotspots-${start}-${end}-${metric}${synthetic ? '-synthetic' : ''}.csv`;
+      const csv = withSelection(await response.text(), { regionName, bounds, start, end });
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = `hotspots-${start}-${end}-${period}-all${synthetic ? '-synthetic' : ''}.csv`;
       document.body.appendChild(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) { setError(err.message); }
     finally { setDownloading(false); }
@@ -187,7 +189,9 @@ export default function App() {
         </MethodPanel>
       </section>
       <section id="explore" className="page-section explore-section" aria-labelledby="explore-title">
-        <div className="page-section-heading"><span>04</span><h2 id="explore-title">Explore Fire History</h2><p>Select a month to inspect its harmonized history.</p></div>
+        <div className="page-section-heading"><span>04</span><h2 id="explore-title">Explore historical burning activity</h2><p>Examine monthly patterns, compare fire seasons, and investigate unusual activity in your selected study area.</p></div>
+        <div className="explore-context"><p>Study area <strong>{regionName}</strong></p><p>Available record <strong>{monthLabel(meta?.start)} – {monthLabel(latestMonth)}</strong></p></div>
+        <p className="explore-unit-note">Active cell-days measure satellite-detected activity, not unique wildfires or burned area. Regional estimates have not been independently validated.</p>
         <div className="mode-toggle explore-view-toggle" aria-label="History view"><button aria-pressed={exploreView === 'calendar'} className={exploreView === 'calendar' ? 'selected' : ''} onClick={() => setExploreView('calendar')}>Fire calendar</button><button aria-pressed={exploreView === 'seasons'} className={exploreView === 'seasons' ? 'selected' : ''} onClick={() => setExploreView('seasons')}>Compare seasons</button></div>
         {exploreView === 'seasons' && <SeasonComparison series={period === 'D' ? daytime : seasonNight} loading={period === 'D' ? dayLoading : seasonLoading} error={period === 'D' ? dayError : seasonError} start={meta?.start} end={latestMonth} regionName={regionName} period={period} onPeriodChange={setPeriod}/>}
         <div className="calendar-view" hidden={exploreView !== 'calendar'}>
@@ -202,10 +206,11 @@ export default function App() {
           </section>
         <div className="explore-grid">
           <section className="calendar-panel">
-            <div className="section-title"><div><div className="eyebrow">THE LONG VIEW</div><h3>Monthly activity</h3></div><div className="mode-toggle" aria-label="Data scale">
+            <div className="section-title"><h3>Monthly activity calendar</h3><div className="mode-toggle" aria-label="Data scale">
               <button aria-pressed={mode === 'raw'} className={mode === 'raw' ? 'selected' : ''} onClick={() => setMode('raw')}>Raw</button>
               <button aria-pressed={mode === 'harmonized'} className={mode === 'harmonized' ? 'selected' : ''} onClick={() => setMode('harmonized')}>Harmonized</button></div></div>
-            <div className="calendar-description"><span>{LABELS[metric]} · {period === 'D' ? 'Daytime' : 'Nighttime'} · active cell-days</span><span>Click a month to inspect ↗</span></div>
+            <div className="calendar-description"><span>{LABELS[metric]} · {period === 'D' ? 'Daytime' : 'Nighttime'} · active cell-days</span><span>Select a month to inspect</span></div>
+            <p className="calendar-scroll-hint">Scroll horizontally to inspect all twelve months.</p>
             {mode === 'harmonized' && !meta?.has_harmonized && <div className="info">Harmonized values are unavailable. Missing values are not zero.</div>}
             {nightUnavailable && <div className="info" role="status">Nighttime harmonized is unavailable before 2012. No night back-cast is produced; these months are missing, not zero.</div>}
             <div className="calendar-scroll" aria-busy={loading}>
@@ -216,32 +221,37 @@ export default function App() {
                     const key = `${year}-${String(index + 1).padStart(2, '0')}`, row = lookup.get(key), value = row?.[metric];
                     const color = heatColor(value, max);
                     const source = mode === 'harmonized' ? row?.source : 'observed';
+                    const provenance = mode === 'harmonized' ? source === 'backcast' ? 'Back-cast estimate from MODIS' : source === 'gapfill' ? 'Gap-filled estimate from MODIS' : 'Observed VIIRS' : `Observed ${LABELS[metric]}`;
+                    const completeness = !row ? 'Outside selected date range' : value == null ? 'Unavailable' : row.incomplete_metrics?.includes(metric) ? 'Incomplete observations' : !row.quality_available ? 'Coverage metadata unavailable' : mode === 'harmonized' && source !== 'observed' ? 'MODIS input coverage complete' : 'Complete observation coverage';
+                    const description = `${month} ${year} · ${value == null ? 'Unavailable' : `${format(value)} active cell-days · ${provenance}`} · ${completeness}${mode === 'harmonized' && source !== 'observed' && row?.incomplete_metrics?.includes('raw_viirs') ? ' · Raw VIIRS incomplete' : ''}${row?.gap_flag ? ' · Sensor gap flagged' : ''}${row?.nrt ? ' · NRT · provisional' : ''}${synthetic ? ' · Synthetic data' : ''}`;
                     return <button key={key} disabled={!row} className={`cell ${value == null ? 'missing' : ''} ${source === 'backcast' ? 'backcast' : source === 'gapfill' ? 'gapfill' : ''} ${row?.gap_flag ? 'gap-flag' : ''} ${row?.incomplete_metrics?.includes(metric) ? 'incomplete-cell' : ''} ${row?.nrt ? 'nrt-cell' : ''} ${selected === key ? 'chosen' : ''}`}
                       style={{ backgroundColor: color }} onClick={() => setSelected(key)} aria-pressed={selected === key}
-                      aria-label={`${month} ${year}: ${value == null ? 'unavailable' : format(value)}${synthetic ? ', synthetic' : ''}${source === 'backcast' ? ', back-cast' : ''}${row?.gap_flag ? ', gap flagged' : ''}${source === 'gapfill' ? ', model gap-fill' : ''}, ${qualityLabel(row, metric)}`}
-                      title={`${month} ${year} · ${format(value)} active cell-days${source === 'backcast' ? ' · Back-cast month' : ''}${source === 'gapfill' ? ' · Gap-filled month' : ''} · ${qualityLabel(row, metric)}`} ><span className="source-symbol" aria-hidden="true">{source === 'backcast' ? '•' : source === 'gapfill' ? '◆' : ''}</span>{row?.gap_flag && <span className="gap-symbol" aria-hidden="true">△</span>}{row?.incomplete_metrics?.includes(metric) && <span className="incomplete-symbol" aria-hidden="true">!</span>}{row?.nrt && <span className="nrt-symbol" aria-hidden="true">N</span>}</button>;
+                      aria-label={`${month} ${year}: ${description.slice(`${month} ${year} · `.length)}`}
+                      title={description} ><span className="source-symbol" aria-hidden="true">{source === 'backcast' ? '•' : source === 'gapfill' ? '◆' : ''}</span>{row?.gap_flag && <span className="gap-symbol" aria-hidden="true">△</span>}{row?.incomplete_metrics?.includes(metric) && <span className="incomplete-symbol" aria-hidden="true">!</span>}{row?.nrt && <span className="nrt-symbol" aria-hidden="true">N</span>}</button>;
                   })}</div>)}
                 </div>}
             </div>
             <div className="heat-scale" aria-label="Square-root cividis colour scale"><span>active cell-days · square-root scale</span><div className="heat-ramp" style={{ background: `linear-gradient(to right, ${CIVIDIS.join(',')})` }} /><div className="heat-ticks">{legendTicks(max).map(tick => <span key={tick.position} style={{ left: `${tick.position * 100}%` }}>{format(tick.value)}</span>)}</div></div>
-            <div className="legend"><span className="missing-key" /> <span>Unavailable</span>{mode === 'harmonized' && <><span>• Back-cast month</span><span>◆ Gap-filled month</span></>}<span>△ Sensor gap flagged</span><span>! Incomplete observations</span><span>N Near-real-time (provisional)</span></div>
+            <div className="legend"><span className="missing-key" /> <span>Unavailable</span><span>Observed: unmarked</span>{mode === 'harmonized' && <><span>• Back-cast estimate</span><span>◆ Gap-filled estimate</span></>}<span>△ Sensor gap flagged</span><span>! Incomplete observations</span><span>N Near-real-time (provisional)</span></div>
           </section>
-          <section className="panel anomaly-panel"><div className="anomaly-title"><h3>Monthly anomaly</h3><span className="month-pill">{selected}</span></div>
+          <section className="panel anomaly-panel" aria-label="Selected-month analysis"><div className="anomaly-title"><h3>Selected-month analysis</h3><span className="month-pill">{selected}</span></div>
+            <p className="anomaly-region">{regionName} · {monthLabel(selected)}</p>
             <p className="muted anomaly-series">Series used: Harmonized · {period === 'D' ? 'Daytime' : 'Nighttime'}</p>
             {anomalyRow && !noData && <p className="anomaly-source footnote">{anomalyRow.source === 'backcast' ? '• Selected month is back-cast from MODIS.' : anomalyRow.source === 'gapfill' ? '◆ Selected month is gap-filled from MODIS.' : stats?.value == null ? 'Selected harmonized value is unavailable.' : 'Selected month uses observed VIIRS.'}{anomalyRow.gap_flag ? ' △ Sensor gap flagged.' : ''}</p>}
-            {!noData && <MonthQuality row={anomalyRow} interval={anomaly?.interval}/>}
             {noData ? <p className="muted">No data in this area</p> : anomalyError ? <p className="field-error" role="alert">{anomalyError}</p> : !stats ? <p className="muted">Loading historical comparison…</p> : <>
+              <div className="comparison"><div><span>Harmonized activity</span><strong>{format(stats.value)}</strong></div><div><span>Historical median</span><strong>{format(stats.historical_median)}</strong></div><div><span>Absolute difference</span><strong>{stats.difference > 0 ? '+' : ''}{format(stats.difference)}</strong></div></div><p className="footnote">active cell-days</p>
               <div className="anomaly-number">{stats.percent_change == null ? '—' : `${stats.percent_change > 0 ? '+' : ''}${format(stats.percent_change)}%`}</div>
               <p className="anomaly-caption">{comparisonBlocked(stats) ? 'Comparison withheld: incomplete observations or unavailable coverage metadata.' : stats.historical_median === 0 ? 'Percent change is undefined for a zero baseline.' : stats.value == null ? (period === 'N' && selected < '2012-01' ? 'Nighttime harmonized is unavailable before 2012.' : 'Selected harmonized value unavailable.') : stats.sample_size === 0 ? 'No earlier years available for this month.' : 'relative to the historical monthly median'}</p>
-              <p className="footnote">active cell-days</p><div className="comparison"><div><span>Selected month</span><strong>{format(stats.value)}</strong></div><div><span>Historical median</span><strong>{format(stats.historical_median)}</strong></div><div><span>Absolute difference</span><strong>{stats.difference > 0 ? '+' : ''}{format(stats.difference)}</strong></div></div>
               <p className="anomaly-rank">{stats.rank == null ? (comparisonBlocked(stats) ? 'Rank withheld' : 'Rank unavailable') : `${stats.rank_tied ? 'Tied rank' : 'Rank'} ${stats.rank} of ${stats.rank_count} ${MONTHS[Number(selected.slice(5))-1]} records`}</p>
               <p className="footnote">1 = highest. Rank includes this month and the earlier same-calendar-month records; ties share a rank.</p>
-              <p className="footnote">{stats.sample_size} earlier {stats.sample_size === 1 ? 'year' : 'years'}{stats.sample_size > 0 ? ` (${stats.baseline_years[0]}–${stats.baseline_years.at(-1)})` : ''} · Same calendar month · Target year excluded. Both values use Harmonized. Baseline excludes known incomplete observations and uses earlier years independent of the displayed window. Estimates remain included and carry model uncertainty.</p>
+              <p className="footnote baseline-definition">{stats.sample_size} earlier {MONTHS[Number(selected.slice(5))-1]} {stats.sample_size === 1 ? 'record' : 'records'}{stats.sample_size > 0 ? ` (${stats.baseline_years[0]}–${stats.baseline_years.at(-1)})` : ''}. Median uses Harmonized values for this calendar month in earlier years; the target year, unavailable months and known incomplete observations are excluded. The baseline is independent of the displayed date window. Estimates remain included with model uncertainty.</p>
+              {stats.sample_size > 0 && <details className="baseline-years"><summary>Included baseline years</summary><p>{stats.baseline_years.join(', ')}</p></details>}
             </>}
+            {!noData && <MonthQuality row={anomalyRow} interval={anomaly?.interval}/>}
           </section>
         </div>
         <AreaSummary data={area} loading={areaLoading} error={areaError}/>
-        <div className="csv-row"><div><h3>Take the selected series with you</h3><p>Monthly {LABELS[metric]} · active cell-days · includes source, NRT, missing-day and interval columns</p></div><button className="export" title={`Export ${LABELS[metric]} in active cell-days`} onClick={download} disabled={!series || loading || downloading}>↓ {downloading ? 'Preparing…' : 'Download CSV'}</button></div>
+        <div className="csv-row"><div><h3>Export study-area data</h3><p>{regionName} · {start} to {end} · {period === 'D' ? 'Daytime' : 'Nighttime'} · active cell-days</p><p>Harmonized and available raw measurements, date, geographic bounds, provenance, completeness flags and monthly interval bounds. Unavailable values remain blank.</p></div><button className="export" title="Export all measurements and geographic selection metadata" onClick={download} disabled={!series || loading || downloading}>{downloading ? 'Preparing…' : 'Download CSV'}</button></div>
         </div>
       </section>
       <footer><span>0.1° GRID · WGS84 · UTC</span><span>Calibration: {meta?.calibration || 'loading'}{synthetic ? ' · Synthetic demonstration' : ''}</span></footer>

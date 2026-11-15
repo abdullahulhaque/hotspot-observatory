@@ -267,3 +267,73 @@ html { scroll-padding-top: var(--header-height); }
   #history .compact-scores th, #history .compact-scores td { padding: 8px 4px; font-size: 10px; }
   #history .compact-scores tbody th { white-space: nowrap; }
 }
+
+/* Section 04: historical activity workspace and selected-month analysis. */
+#explore { background: #111d25; border-color: #2b3a44; }
+#explore > .page-section-heading h2 { font-size: 21px; color: #e1e9ef; letter-spacing: 0; }
+#explore > .page-section-heading p { width: 100%; margin-left: 0; font-size: 13px; line-height: 1.65; }
+#explore .explore-context { display: flex; flex-wrap: wrap; gap: 12px 28px; padding: 14px 16px; margin-bottom: 10px; background: #14212b; border: 1px solid #354550; border-radius: 5px; }
+#explore .explore-context p { color: #aabcc8; font-size: 11px; line-height: 1.7; }
+#explore .explore-context strong { display: block; color: #e1e9ef; font-size: 13px; font-weight: 500; }
+#explore .explore-unit-note { color: #aabcc8; font-size: 11px; line-height: 1.7; margin: 10px 0 18px; }
+#explore .mode-toggle { border-color: #435460; background: #101b23; }
+#explore .mode-toggle button { padding: 9px 12px; color: #b4c5ce; }
+#explore .mode-toggle button.selected { color: #edf2f5; background: #2a3b48; }
+#explore .observation-controls { background: #14212b; border-color: #354550; gap: 16px; }
+#explore .summary strong { color: #e1e9ef; font-size: 24px; }
+#explore .summary span { line-height: 1.6; }
+#explore .explore-grid { grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; }
+#explore .calendar-panel { padding: 18px; border-color: #354550; border-radius: 5px; }
+#explore .section-title { gap: 12px; flex-wrap: wrap; }
+#explore .section-title h3 { font-size: 16px; }
+#explore .calendar-description { color: #b4c5ce; line-height: 1.6; }
+#explore .calendar { min-width: 540px; }
+#explore .calendar-row { grid-template-columns: 44px repeat(12, minmax(0, 1fr)); gap: 5px; margin-bottom: 5px; }
+#explore .cell { height: 25px; border-radius: 2px; }
+#explore .cell.chosen { outline-color: #e1e9ef; }
+#explore .cell:hover:not(:disabled) { filter: none; outline: 2px solid #c4d1da; }
+#explore .cell .source-symbol, #explore .cell .gap-symbol, #explore .cell .incomplete-symbol, #explore .cell .nrt-symbol { text-shadow: 0 1px 1px #101b23; }
+#explore .calendar-scroll-hint { display: none; font-size: 10px; color: #aabcc8; margin-bottom: 10px; }
+#explore .legend { flex-wrap: wrap; gap: 6px 12px; font-size: 10px; line-height: 1.6; }
+#explore .heat-scale { font-size: 11px; }
+#explore .anomaly-panel { padding: 18px; background: #14212b; border: 1px solid #354550; border-radius: 5px; }
+#explore .anomaly-title { flex-wrap: wrap; gap: 8px; }
+#explore .anomaly-title h3 { font-size: 16px; }
+#explore .month-pill { font-size: 11px; color: #c4d1da; border-color: #435460; }
+#explore .anomaly-region { font-size: 12px; color: #d4dfe6; line-height: 1.7; margin-top: 12px; }
+#explore .anomaly-series, #explore .anomaly-source { color: #b4c5ce; font-size: 11px; line-height: 1.65; margin-top: 8px; }
+#explore .comparison { border-color: #354550; margin-top: 14px; }
+#explore .comparison > div { font-size: 12px; padding: 8px 0; }
+#explore .comparison > div:first-child strong { font-size: 20px; }
+#explore .comparison strong { font-variant-numeric: tabular-nums; color: #e1e9ef; }
+#explore .anomaly-number { color: #d4dfe6; font-size: 27px; letter-spacing: 0; margin-top: 12px; }
+#explore .anomaly-caption { color: #b4c5ce; font-size: 11px; }
+#explore .anomaly-rank { color: #d4dfe6; font-size: 14px; border-color: #354550; margin-top: 14px; }
+#explore .anomaly-panel .footnote { font-size: 11px; line-height: 1.7; }
+#explore .baseline-years, #explore .month-quality summary { color: #b4c5ce; font-size: 11px; line-height: 1.7; cursor: pointer; }
+#explore .baseline-years p { margin-top: 8px; }
+#explore .provenance-badges { color: #cbb278; font-size: 12px; font-weight: 500; }
+#explore .quality-notice { color: #dfbc9f; font-size: 11px; line-height: 1.7; }
+#explore .prediction-interval { border-left-color: #7b929f; font-size: 12px; }
+#explore .area-summary { padding: 18px; background: #14212b; border-color: #354550; }
+#explore .area-summary h3 { color: #d4dfe6; }
+#explore .top-years li strong, #explore .peak-month strong { color: #d4dfe6; }
+#explore .csv-row { border-color: #354550; }
+#explore .csv-row p { line-height: 1.7; max-width: 740px; }
+#explore .export { background: #2a3b48; color: #edf2f5; border: 1px solid #91a7b6; border-radius: 4px; font-weight: 500; }
+#explore .season-detail { border-color: #354550; background: #14212b; border-radius: 5px; }
+#explore .season-detail-heading strong { color: #d4dfe6; }
+#explore .season-bar.active .season-activity, #explore .season-bar:focus-visible .season-activity { stroke: #d4dfe6; }
+#explore .season-controls select { border-color: #435460; }
+#explore button:focus-visible, #explore input:focus-visible, #explore select:focus-visible, #explore summary:focus-visible { outline: 2px solid #b7c8d4; outline-offset: 3px; }
+@media(max-width:1199px) { #explore .calendar-scroll-hint { display: block; } }
+@media(max-width:900px) {
+  #explore .explore-grid { grid-template-columns: minmax(0, 1fr); }
+  #explore .anomaly-panel { position: static; }
+}
+@media(max-width:600px) {
+  #explore > .page-section-heading h2 { font-size: 19px; }
+  #explore .explore-context { padding: 12px; }
+  #explore .calendar-panel, #explore .anomaly-panel, #explore .area-summary { padding: 14px 10px; }
+  #explore .season-detail .validation-table th, #explore .season-detail .validation-table td { padding: 7px 5px; }
+}

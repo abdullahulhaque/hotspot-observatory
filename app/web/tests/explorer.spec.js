@@ -9,7 +9,7 @@ test('four ordered sections share a region and show file-backed validation', asy
   const validation = await (await request.get('/api/validation')).json();
   await page.goto('/');
   await expect(page.locator('main .page-section')).toHaveCount(4);
-  await expect(page.locator('.page-section-heading h2')).toHaveText(['Choose your study area.','Compare the Satellites','Making satellite observations comparable','Explore Fire History']);
+  await expect(page.locator('.page-section-heading h2')).toHaveText(['Choose your study area.','Compare the Satellites','Making satellite observations comparable','Explore historical burning activity']);
   await expect(page.locator('.synthetic-banner')).toHaveCount(meta.synthetic ? 1 : 0);
   await expect(page.getByLabel('End month')).toHaveValue(meta.end);
   await expect(page.getByText('MODIS and VIIRS observe the same burning activity with different detection capabilities. Their raw hotspot measurements cannot be compared directly without accounting for these differences.', { exact:true })).toBeVisible();
@@ -98,7 +98,7 @@ test('Explore harmonized anomaly, ranks, source flags and selected-series CSV', 
   await page.getByRole('button',{name:/Download CSV/}).click();
   const csv = await csvResponse; await download;
   const columns = (await csv.text()).split('\n')[0].trim().split(',');
-  expect(columns).toContain('harmonized'); expect(columns).toContain('source'); expect(columns).not.toContain('raw_modis');
+  expect(columns).toContain('harmonized'); expect(columns).toContain('source'); expect(columns).toContain('raw_modis'); expect(columns).toContain('raw_viirs');
   const before = await page.locator('.anomaly-number').textContent();
   await page.getByRole('button',{name:'Raw',exact:true}).click();
   await expect(page.locator('.calendar .backcast, .calendar .gapfill')).toHaveCount(0);
@@ -133,7 +133,7 @@ test('map drawing and narrow layout work, validation has missing-file placeholde
   await expect(page.getByLabel('West longitude')).not.toHaveValue(previous);
   await page.getByRole('button',{name:'Gran Chaco',exact:true}).click();
   await page.setViewportSize({width:390,height:844});
-  await expect(page.getByRole('heading',{name:'Explore Fire History',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Explore historical burning activity',exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   for (const id of ['where','satellites','history','explore']) await page.locator(`#${id}`).screenshot({path:`test-results/four-sections-mobile-${id}.png`});
 });
@@ -185,7 +185,7 @@ test('live October default, incomplete months, July estimate and NRT remain dist
   await page.getByRole('button',{name:/Download CSV/}).click();
   const response=await responsePromise; await downloadPromise;
   expect(new URL(response.url()).searchParams.get('bbox')).toBe('-64,-38,-59,-33');
-  expect(new URL(response.url()).searchParams.get('metric')).toBe('raw_viirs');
+  expect(new URL(response.url()).searchParams.get('metric')).toBe('all');
   const header=(await response.text()).split('\n')[0];
   for(const column of ['source','nrt','incomplete','missing_snpp_days','lo80','hi80']) expect(header).toContain(column);
 });

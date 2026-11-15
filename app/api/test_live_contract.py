@@ -2,6 +2,7 @@
 import csv
 import io
 import json
+from statistics import median
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -78,6 +79,42 @@ def test_download_preserves_quality_and_real_regional_values(live):
         assert row['nrt']==str(original['nrt']) and row['incomplete']==str(original['incomplete'])
         assert row['synthetic']=='false' and 'raw_modis' not in row
     assert exported[4]['limitations'] and exported[4]['lo80']
+
+
+def test_real_harmonized_baselines_and_ranks_exclude_incomplete_and_unavailable_months(live):
+    bbox = '-64,-28,-59,-24'
+    records = live.get('/series', params=dict(bbox=bbox, start='2003-01', end='2026-10', daynight='D')).json()['data']
+    excluded = []
+    for month in range(1, 11):
+        earlier = [r for r in records if r['year'] < 2026 and r['month'] == month]
+        comparable = [r for r in earlier if r['harmonized'] is not None and 'harmonized' not in r['incomplete_metrics']]
+        excluded.extend(r for r in earlier if r not in comparable)
+        current = next(r for r in records if r['year'] == 2026 and r['month'] == month)
+        stats = live.get('/anomaly', params=dict(bbox=bbox, month=f'2026-{month:02}', daynight='D')).json()['data'][0]['metrics']['harmonized']
+        expected = median(r['harmonized'] for r in comparable)
+        assert stats['historical_median'] == pytest.approx(expected)
+        assert stats['baseline_years'] == [r['year'] for r in comparable]
+        if current['incomplete']:
+            assert stats['difference'] is stats['percent_change'] is stats['rank'] is None
+        else:
+            assert stats['difference'] == pytest.approx(current['harmonized'] - expected)
+            assert stats['percent_change'] == pytest.approx(100 * (current['harmonized'] - expected) / expected)
+            assert stats['rank'] == 1 + sum(r['harmonized'] > current['harmonized'] for r in comparable)
+            assert stats['rank_count'] == len(comparable) + 1
+    assert excluded, 'Real-data verification must exercise an excluded historical month'
+
+
+def test_all_measurement_export_preserves_raw_values_and_metric_specific_completeness(live):
+    params = dict(bbox='-64,-38,-59,-33', start='2026-03', end='2026-10', daynight='D')
+    records = live.get('/series', params=params).json()['data']
+    response = live.get('/export.csv', params={**params, 'metric': 'all'})
+    exported = list(csv.DictReader(io.StringIO(response.text)))
+    for actual, expected in zip(exported, records, strict=True):
+        for metric in main.METRICS:
+            assert actual[metric] == '' if expected[metric] is None else float(actual[metric]) == expected[metric]
+        assert actual['source'] == expected['source']
+        assert actual['incomplete'] == str(bool(expected['incomplete_metrics']))
+        assert actual['incomplete_metrics'] == ';'.join(expected['incomplete_metrics'])
 
 
 def test_missing_production_never_falls_back(monkeypatch, tmp_path):
