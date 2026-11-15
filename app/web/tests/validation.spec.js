@@ -9,7 +9,13 @@ test('national validation, baseline, periods and interval coverage come from met
   await page.goto('/');
   const section = page.locator('#history');
   await expect(section.getByRole('heading', { level: 2 })).toHaveText('Making satellite observations comparable');
-  await expect(section.locator('.validation-metric > strong')).toHaveText([`${fmt(score.raw_modis)}%`, `${fmt(score.harmonized)}%`]);
+  await expect(section.locator('.validation-metric > strong')).toHaveText([`${fmt(score.raw_modis)}%`, `${fmt(score.model_a)}%`, `${fmt(score.harmonized)}%`]);
+  const bars = section.locator('.validation-error-track > span');
+  const widths = await bars.evaluateAll(elements => elements.map(el => parseFloat(el.style.width)));
+  expect(widths[0] / widths[2]).toBeCloseTo(score.raw_modis / score.harmonized, 4);
+  expect(widths[1] / widths[2]).toBeCloseTo(score.model_a / score.harmonized, 4);
+  await expect(section.locator('.validation-details')).not.toHaveAttribute('open', '');
+  await expect(section.locator('.compact-scores')).not.toBeVisible();
   await expect(section.locator('.baseline-comparison strong')).toHaveText(`${fmt(score.model_a)}%`);
   await expect(section.locator('.validation-periods')).toContainText('Calibration: 2012–2019 · Held-out validation: 2020–2025');
   await expect(section.locator('.validation-reference')).toContainText('VIIRS is the reference instrument, not independent wildfire ground truth');
@@ -30,7 +36,11 @@ test('national validation, baseline, periods and interval coverage come from met
     await page.getByRole('link', { name: 'Harmonization', exact: true }).click();
     await expect.poll(() => section.evaluate(el => Math.abs(el.getBoundingClientRect().top - document.querySelector('.topbar').getBoundingClientRect().bottom - 16))).toBeLessThan(3);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await section.getByText('Technical validation details', { exact: true }).click();
+    await expect(section.locator('.compact-scores')).toBeVisible();
     expect(await section.locator('.compact-scores').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await section.getByText('Technical validation details', { exact: true }).click();
+    await page.getByRole('link', { name: 'Harmonization', exact: true }).click();
     await section.screenshot({ path: `test-results/validation-${width}.png` });
   }
 });
@@ -77,7 +87,7 @@ test('changed and missing metadata never produce fixed scores or an unsupported 
   });
   await page.goto('/');
   const section = page.locator('#history');
-  await expect(section.locator('.validation-metric > strong')).toHaveText(['20%', '30%']);
+  await expect(section.locator('.validation-metric > strong')).toHaveText(['20%', '35%', '30%']);
   await expect(section.locator('.baseline-comparison strong')).toHaveText('35%');
   await expect(section.locator('.validation-periods')).toContainText('2014–2016');
   await expect(section.locator('.validation-periods')).toContainText('2021–2022');
@@ -86,9 +96,43 @@ test('changed and missing metadata never produce fixed scores or an unsupported 
   await page.unroute('**/api/validation');
   await page.route('**/api/validation', route => route.fulfill({ json: { status: 'ready', metrics: [], periods: [], known_limitations: [] } }));
   await page.reload();
-  await expect(section.locator('.validation-metric > strong')).toHaveText(['—', '—']);
+  await expect(section.locator('.validation-metric > strong')).toHaveText(['—', '—', '—']);
   await expect(section.locator('.baseline-comparison strong')).toHaveText('—');
   await expect(section.locator('.baseline-comparison')).toContainText('Not reported');
   await expect(section.locator('.validation-conclusion')).toContainText('will appear when validation scores are available');
   await expect(section.locator('.interval-coverage')).toContainText('not reported');
+  await expect(section.locator('.held-out-chart')).toHaveCount(0);
+  await expect(section.locator('.held-out-comparison')).toContainText('not available');
+});
+
+test('saved held-out predictions match the national artifact, retain excluded months and precede regional history', async ({ page, request }) => {
+  const validation = await (await request.get('/api/validation')).json();
+  expect(validation.prediction_series.status).toBe('ready');
+  const rows = validation.prediction_series.data;
+  await page.goto('/');
+  const section = page.locator('#history');
+  await expect(section.locator('.held-out-chart')).toBeVisible();
+  const validationBox = await section.locator('.held-out-comparison').boundingBox();
+  const historyBox = await section.locator('.why-panel').boundingBox();
+  expect(historyBox.y).toBeGreaterThan(validationBox.y + validationBox.height);
+  const slider = page.getByLabel('Inspect validation month');
+  await expect(slider).toHaveAttribute('max', String(rows.length - 1));
+  for (const date of [[2020, 1], [2022, 7], [2025, 12]]) {
+    const index = rows.findIndex(row => row.year === date[0] && row.month === date[1]);
+    const row = rows[index];
+    await slider.fill(String(index));
+    await expect(section.locator('.held-out-values [data-metric=actual_viirs]')).toHaveText(activity(row.actual_viirs));
+    await expect(section.locator('.held-out-values [data-metric=model_b]')).toHaveText(activity(row.model_b));
+    await expect(section.locator('.held-out-values')).toContainText(row.included ? 'Included in validation' : 'Excluded from validation');
+    if (row.gap_flag) await expect(section.locator('.held-out-values')).toContainText('Sensor gap flagged');
+  }
+  await expect(section.locator('.held-out-excluded')).toHaveCount(rows.filter(row => !row.included).length * 2);
+  const original = await section.locator('.held-out-line.model_b').getAttribute('d');
+  await page.getByRole('button', { name: 'Gran Chaco', exact: true }).click();
+  await expect(section.locator('.why-panel > .muted')).toContainText('Gran Chaco');
+  await expect(section.locator('.held-out-scope')).toContainText('All Argentina');
+  await expect(section.locator('.held-out-line.model_b')).toHaveAttribute('d', original);
+  await slider.focus(); await page.keyboard.press('Home');
+  await expect(section.locator('.held-out-values')).toContainText('2020-01');
+  await expect(section.locator('.limitations-summary')).toBeVisible();
 });

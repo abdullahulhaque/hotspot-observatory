@@ -117,11 +117,11 @@ test('Explore harmonized anomaly, ranks, source flags and selected-series CSV', 
 test('map drawing and narrow layout work, validation has missing-file placeholders', async ({page}) => {
   await page.route('**/api/validation',route=>route.fulfill({json:{status:'pending',message:'Awaiting out/validation.json',metrics:[]}}));
   await page.goto('/');
-  await expect(page.locator('.validation-placeholder strong')).toHaveText(['—','—']);
+  await expect(page.locator('.validation-placeholder strong')).toHaveText(['—','—','—']);
   await expect(page.getByText('Awaiting out/validation.json')).toBeVisible();
   await page.unroute('**/api/validation');
   await page.reload();
-  await expect(page.locator('.compact-scores')).toBeVisible();
+  await expect(page.locator('.validation-summary')).toBeVisible();
   const canvas = page.locator('.maplibregl-canvas');
   await expect(canvas).toBeVisible();
   const previous = await page.getByLabel('West longitude').inputValue();

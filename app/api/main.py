@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 
 from .quality import annotate, read_metadata
+from .validation_predictions import read_predictions
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "fixtures/synthetic_harmonized.parquet"
@@ -306,6 +307,7 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
                     "periods": period_reports, "known_limitations": payload.get("known_limitations", []),
                     "monthly_interval_coverage": coverage, "nominal_interval_coverage": payload.get("interval_80", {}).get("nominal"),
                     "live_year": payload.get("live_year", {}),
+                    "prediction_series": read_predictions(validation_path, payload),
                     "notes": [str(note) for note in payload.get("notes", [])]}
         except (OSError, ValueError, KeyError, TypeError) as exc:
             return {"status": "invalid", "message": f"Cannot read validation scores: {exc}", "metrics": []}

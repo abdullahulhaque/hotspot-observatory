@@ -219,8 +219,24 @@ html { scroll-padding-top: var(--header-height); }
 #history .validation-heading h3 { font-size: 15px; }
 #history .validation-periods { margin-top: 10px; font-size: 12px; color: #aabcc8; line-height: 1.7; }
 #history .validation-periods strong { color: #d4dfe6; font-weight: 500; }
-#history .validation-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 14px; }
+#history .validation-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 14px; }
 #history .validation-metric { padding: 18px; background: #14212b; border: 1px solid #354550; border-radius: 5px; }
+#history .validation-metric h4 { min-height: 38px; }
+#history .validation-error-track { height: 10px; background: #243440; margin-top: 12px; }
+#history .validation-error-track span { display: block; height: 100%; background: #79b3b2; }
+#history .validation-metric.baseline .validation-error-track span { background: #91a7b6; }
+#history .validation-metric.model .validation-error-track span { background: #cbb278; }
+#history .validation-scale { margin-top: 14px; font-size: 11px; color: #b4c5ce; }
+#history .validation-conclusion { margin-top: 12px; font-size: 13px; line-height: 1.75; color: #d4dfe6; }
+#history .held-out-comparison { margin-top: 18px; padding: 16px; border: 1px solid #354550; border-radius: 5px; background: #14212b; }
+#history .held-out-comparison h3 { font-size: 15px; }
+#history .held-out-scope, #history .held-out-values { color: #b4c5ce; font-size: 11px; line-height: 1.7; margin-top: 10px; }
+#history .held-out-comparison .chart-legend { margin: 12px 0 0; }
+#history .held-out-chart text { font-size: 11px; }
+#history .held-out-values strong { font-weight: 500; color: #e1e9ef; }
+#history .held-out-slider { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 10px; font-size: 11px; color: #b4c5ce; }
+#history .held-out-slider input { flex: 1; min-width: 160px; accent-color: #a3b8c6; }
+#history .held-out-slider input:focus-visible { outline: 2px solid #b7c8d4; outline-offset: 3px; }
 #history h4 { margin: 0; color: #c4d1da; font-size: 12px; font-weight: 500; line-height: 1.6; }
 #history .validation-metric > strong { display: block; color: #e1e9ef; font: 500 29px 'Space Grotesk', sans-serif; margin: 10px 0 5px; }
 #history .validation-metric > span { color: #aabcc8; font-size: 11px; }
@@ -228,7 +244,7 @@ html { scroll-padding-top: var(--header-height); }
 #history .baseline-comparison strong { color: #e1e9ef; font-weight: 500; }
 #history .validation-table caption { text-align: left; color: #c4d1da; padding: 12px 0 8px; font-size: 12px; }
 #history .compact-scores th, #history .compact-scores td { padding: 9px 10px; }
-#history .validation-details { margin-top: 14px; }
+#history .validation-details { margin-top: 16px; padding: 12px 0; border-top: 1px solid #354550; border-bottom: 1px solid #354550; }
 #history .validation-details > dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px; background: #14212b; }
 #history .validation-details > dl dd { margin: 5px 0; overflow-wrap: anywhere; }
 #history .validation-details > dl ul { display: flex; flex-wrap: wrap; list-style: none; padding: 0; gap: 8px; }

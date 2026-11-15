@@ -17,6 +17,22 @@ from app.api.quality import annotate
 BBOX = '-74,-56,-53,-21'
 
 
+def test_held_out_prediction_api_matches_saved_scientific_output(live):
+    validation = live.get('/validation').json()
+    series = validation['prediction_series']
+    assert series['status'] == 'ready' and series['scope'] == 'national'
+    metadata = json.loads(main.VALIDATION.read_text())
+    with (main.ROOT / 'out/task2/predictions_monthly.csv').open() as stream:
+        saved = [row for row in csv.DictReader(stream) if int(row['yr']) in metadata['test_years']]
+    assert len(series['data']) == len(saved) == 72
+    assert sum(row['included'] for row in series['data']) == metadata['interval_80']['test_months_n']
+    for row, original in zip(series['data'], saved):
+        assert row['model_b'] == float(original['b_power'])
+        assert row['actual_viirs'] == float(original['actual_viirs'])
+        assert row['gap_flag'] == (original['gap_flag'] == 'True')
+        assert row['complete'] == (original['complete'] == 'True')
+
+
 @pytest.fixture(scope='module')
 def live():
     assert main.PRODUCTION.exists(), 'Regenerated real data is required for integration tests'
