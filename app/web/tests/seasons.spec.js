@@ -5,25 +5,25 @@ test('navigation tracks initial load, scroll, links and reduced motion', async (
   await page.setViewportSize({width:1024,height:1100});
   await page.goto('/');
   const current = page.locator('.section-nav [aria-current="location"]');
-  await expect(current).toHaveText('01 Select a study area');
+  await expect(current).toHaveText('Study Area');
   await expect(page.locator('.raw-chart')).toHaveCount(2);
   await page.evaluate(() => window.scrollTo({top:document.getElementById('satellites').offsetTop,behavior:'instant'}));
-  await expect(current).toHaveText('02 Compare satellites');
+  await expect(current).toHaveText('Compare Sensors');
   await page.evaluate(() => window.scrollTo({top:document.getElementById('history').offsetTop,behavior:'instant'}));
-  await expect(current).toHaveText('03 Understand harmonization');
-  await page.getByRole('link',{name:'04 Explore fire history',exact:true}).click();
+  await expect(current).toHaveText('Harmonization');
+  await page.getByRole('link',{name:'Fire History',exact:true}).click();
   await expect(page).toHaveURL(/#explore$/);
-  await expect(current).toHaveText('04 Explore fire history');
-  await expect.poll(() => page.locator('#explore').evaluate(el=>Math.abs(el.getBoundingClientRect().top-20))).toBeLessThan(3);
+  await expect(current).toHaveText('Fire History');
+  await expect.poll(() => page.locator('#explore').evaluate(el=>Math.abs(el.getBoundingClientRect().top-document.querySelector('.topbar').getBoundingClientRect().height-16))).toBeLessThan(3);
   expect(await page.evaluate(()=>getComputedStyle(document.documentElement).scrollBehavior)).toBe('smooth');
-  await page.getByRole('link',{name:'01 Select a study area',exact:true}).click();
-  await expect(current).toHaveText('01 Select a study area');
+  await page.getByRole('link',{name:'Study Area',exact:true}).click();
+  await expect(current).toHaveText('Study Area');
   await page.emulateMedia({reducedMotion:'reduce'});
   expect(await page.evaluate(()=>getComputedStyle(document.documentElement).scrollBehavior)).toBe('auto');
   await page.getByRole('button',{name:'Compare seasons',exact:true}).click();
   await page.setViewportSize({width:1440,height:1800});
   await page.evaluate(()=>window.scrollTo({top:document.documentElement.scrollHeight,behavior:'instant'}));
-  await expect(current).toHaveText('04 Explore fire history');
+  await expect(current).toHaveText('Fire History');
 });
 
 test('Gran Chaco: ten complete springs, actual harmonized totals, partial October and regional updates', async ({page,request}) => {

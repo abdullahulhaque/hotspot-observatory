@@ -154,11 +154,10 @@ export default function App() {
   const rawIndex = Math.max(0, rawRows.findIndex(row => monthKey(row) === hoveredMonth));
 
   return <div className="app-shell">
-    <header className="topbar"><div className="brand"><span className="brand-icon" aria-hidden="true">◉</span><div>HOTSPOT <strong>OBSERVATORY</strong><small>Harmonized satellite fire history</small></div></div></header>
+    <header className="topbar"><div className="topbar-inner"><div className="brand"><span className="brand-icon" aria-hidden="true">◉</span><div>HOTSPOT <strong>OBSERVATORY</strong><small>Harmonized satellite fire history</small></div></div><SectionNav/></div></header>
     {synthetic && <div className="synthetic-banner" role="status"><strong>◈ SYNTHETIC DATA</strong><span>Invented demonstration values. Not NASA observations. Not for scientific use.</span></div>}
     <main className="four-section-page">
       <div className="page-heading"><div><h1>Harmonized fire activity from MODIS and VIIRS</h1><p className="hero-subhead">Explore decades of satellite-detected fire activity through a unified historical record. Compare burning patterns across regions, seasons, and years, identify unusual activity, and investigate long-term trends using NASA observations calibrated for differences between satellite instruments.</p><p className="hero-note">Current coverage: {meta?.country || 'Argentina'}, {meta?.start?.slice(0, 4) || '2003'}–{latestMonth?.slice(0, 4) || '2026'} · More regions planned</p><details className="measurement-explanation"><summary>Data and methods</summary><p>Argentina is divided into 0.1° geographic grid cells. Each cell with at least one hotspot detection on a day contributes one active cell-day. The same cell can count again on another day. This measures satellite-detected activity, not unique fires or burned area.</p></details></div></div>
-      <SectionNav/>
       {error && <div className="error" role="alert">{error} <button onClick={() => setRetry(v => v + 1)}>Retry</button></div>}
       <div className="overview-row">
       <section id="where" className="page-section" aria-labelledby="where-title">

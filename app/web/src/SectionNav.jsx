@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
 
-const SECTIONS = [['where', '01 Select a study area'], ['satellites', '02 Compare satellites'], ['history', '03 Understand harmonization'], ['explore', '04 Explore fire history']];
+const SECTIONS = [['where', 'Study Area'], ['satellites', 'Compare Sensors'], ['history', 'Harmonization'], ['explore', 'Fire History']];
 
 export default function SectionNav() {
   const [active, setActive] = useState('where');
   useEffect(() => {
     let frame;
+    const header = document.querySelector('.topbar');
     const update = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        const threshold = Math.min(180, window.innerHeight * .25);
+        const headerHeight = header?.getBoundingClientRect().height || 0;
+        document.documentElement.style.setProperty('--header-height', `${headerHeight}px`);
+        const threshold = Math.max(headerHeight + 24, Math.min(180, window.innerHeight * .25));
         let current = 'where';
         let currentTop = -Infinity;
         for (const [id] of SECTIONS) {
@@ -29,6 +32,7 @@ export default function SectionNav() {
     window.addEventListener('resize', update);
     window.addEventListener('hashchange', update);
     const observer = new ResizeObserver(update);
+    if (header) observer.observe(header);
     for (const [id] of SECTIONS) {
       const section = document.getElementById(id);
       if (section) observer.observe(section);
@@ -37,6 +41,7 @@ export default function SectionNav() {
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
+      document.documentElement.style.removeProperty('--header-height');
       window.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
       window.removeEventListener('hashchange', update);

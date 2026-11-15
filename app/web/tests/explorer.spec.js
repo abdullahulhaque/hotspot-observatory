@@ -203,7 +203,7 @@ test('study-area introduction, responsive map and metadata dates', async ({page}
   await expect(page.locator('.measurement-explanation p')).toContainText('0.1° geographic grid cells');
   await expect(page.locator('.measurement-explanation p')).toContainText('The same cell can count again on another day.');
   await page.getByText('Data and methods', {exact:true}).click();
-  await expect(page.locator('.section-nav a')).toHaveText(['01 Select a study area','02 Compare satellites','03 Understand harmonization','04 Explore fire history']);
+  await expect(page.locator('.section-nav a')).toHaveText(['Study Area','Compare Sensors','Harmonization','Fire History']);
   await expect(page.locator('#where .page-section-heading p')).toHaveText('Select a region or define your own area to explore NASA satellite observations.');
   await expect(page.locator('.presets button')).toHaveText(['All Argentina','Gran Chaco','Pampas','Patagonia']);
   await expect(page.locator('.study-area-name')).toHaveText('All Argentina');

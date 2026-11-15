@@ -14,11 +14,11 @@ test('desktop overview is 55/45, lower sections are full width, and row anchors 
   expect(explore.x).toBeCloseTo(history.x, 0);
   expect(explore.width).toBeCloseTo(history.width, 0);
   const current = page.locator('.section-nav [aria-current="location"]');
-  await expect(current).toHaveText('01 Select a study area');
-  await page.getByRole('link',{name:'02 Compare satellites',exact:true}).click();
-  await expect(current).toHaveText('02 Compare satellites');
-  await page.getByRole('link',{name:'01 Select a study area',exact:true}).click();
-  await expect(current).toHaveText('01 Select a study area');
+  await expect(current).toHaveText('Study Area');
+  await page.getByRole('link',{name:'Compare Sensors',exact:true}).click();
+  await expect(current).toHaveText('Compare Sensors');
+  await page.getByRole('link',{name:'Study Area',exact:true}).click();
+  await expect(current).toHaveText('Study Area');
   await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
   await page.screenshot({path:'test-results/analytics-layout-desktop.png',fullPage:true});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
@@ -39,5 +39,27 @@ test('tablet and mobile stack all sections in order and retain the region select
     await expect(page.locator('.study-area-name')).toHaveText('Gran Chaco');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
     await page.screenshot({path:`test-results/analytics-layout-${width}.png`,fullPage:true});
+  }
+});
+
+test('sticky header navigation is reachable and leaves anchor headings visible at every width', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.topbar .section-nav a')).toHaveText(['Study Area','Compare Sensors','Harmonization','Fire History']);
+  await expect(page.locator('main .section-nav')).toHaveCount(0);
+  await expect(page.locator('.topbar .section-nav [aria-current="location"]')).toHaveText('Study Area');
+  await expect(page.locator('.raw-chart')).toHaveCount(2);
+  for (const width of [1440, 820, 390, 320]) {
+    await page.setViewportSize({width,height:1000});
+    expect(await page.locator('.topbar .section-nav').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+    for (const [name,id] of [['Harmonization','history'],['Fire History','explore'],['Study Area','where'],['Compare Sensors','satellites']]) {
+      await page.getByRole('link',{name,exact:true}).click();
+      await expect(page.locator('.topbar .section-nav [aria-current="location"]')).toHaveText(name);
+      await expect.poll(()=>page.locator(`#${id}`).evaluate(el=>Math.abs(el.getBoundingClientRect().top-document.querySelector('.topbar').getBoundingClientRect().bottom-16))).toBeLessThan(3);
+      expect(Math.abs((await page.locator('.topbar').boundingBox()).y)).toBeLessThan(1);
+    }
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+    await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
+    await expect(page.locator('.topbar .section-nav [aria-current="location"]')).toHaveText('Study Area');
+    await page.screenshot({path:`test-results/sticky-header-${width}.png`});
   }
 });
