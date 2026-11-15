@@ -12,7 +12,7 @@ test('four ordered sections share a region and show file-backed validation', asy
   await expect(page.locator('.page-section-heading h2')).toHaveText(['Choose your study area.','Compare the Satellites','Understand Harmonization','Explore Fire History']);
   await expect(page.locator('.synthetic-banner')).toHaveCount(meta.synthetic ? 1 : 0);
   await expect(page.getByLabel('End month')).toHaveValue(meta.end);
-  await expect(page.getByText('More VIIRS detections do not mean more fires occurred.', { exact:true })).toBeVisible();
+  await expect(page.getByText('MODIS and VIIRS observe the same burning activity with different detection capabilities. Their raw hotspot measurements cannot be compared directly without accounting for these differences.', { exact:true })).toBeVisible();
   await expect(page.locator('.raw-chart')).toHaveCount(2);
   await expect(page.locator('#history .annual-join')).toContainText('2012: artificial sensor jump');
   await expect(page.locator('.compact-scores tbody tr')).toHaveCount(validation.periods.length);

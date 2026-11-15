@@ -4,7 +4,7 @@ import { qualityLabel, comparisonBlocked } from './provenance.js';
 import SectionNav from './SectionNav.jsx';
 import SeasonComparison from './SeasonComparison.jsx';
 import RegionMap from './Map.jsx';
-import SensorChart from './SensorChart.jsx';
+import SensorComparison from './SensorComparison.jsx';
 import MethodPanel from './MethodPanel.jsx';
 import AreaSummary from './AreaSummary.jsx';
 import WhyHarmonize from './WhyHarmonize.jsx';
@@ -46,7 +46,6 @@ export default function App() {
   const [daytime, setDaytime] = useState(null), [dayLoading, setDayLoading] = useState(true), [dayError, setDayError] = useState('');
   const [exploreView, setExploreView] = useState('calendar');
   const [seasonNight, setSeasonNight] = useState(null), [seasonLoading, setSeasonLoading] = useState(true), [seasonError, setSeasonError] = useState('');
-  const [hoveredMonth, setHoveredMonth] = useState('');
   const metric = mode === 'harmonized' ? 'harmonized' : sensor;
   const query = useMemo(() => new URLSearchParams({ bbox: bounds.join(','), start, end, daynight: period }), [bounds, start, end, period]);
 
@@ -105,7 +104,7 @@ export default function App() {
     setDayLoading(true); setDayError(''); setDaytime(null);
     const params = new URLSearchParams({ bbox: bounds.join(','), start: meta.start, end: meta.end, daynight: 'D' });
     getJSON(`/series?${params}`, controller.signal).then(data => {
-      setDaytime(data); setHoveredMonth(value => value >= meta.start && value <= meta.end ? value : meta.end);
+      setDaytime(data);
     }).catch(err => { if (err.name !== 'AbortError') setDayError(err.message); })
       .finally(() => { if (!controller.signal.aborted) setDayLoading(false); });
     return () => controller.abort();
@@ -149,9 +148,6 @@ export default function App() {
 
   const regionName = PRESETS.find(([,values]) => values.join(',') === bounds.join(','))?.[0] || 'Custom area';
   const latestMonth = meta?.latest_complete_month && meta.latest_complete_month < meta.end ? meta.latest_complete_month : meta?.end;
-  const rawRows = daytime?.data || [];
-  const rawMaximum = Math.max(1, ...rawRows.flatMap(row => [row.raw_modis || 0, row.raw_viirs || 0]));
-  const rawIndex = Math.max(0, rawRows.findIndex(row => monthKey(row) === hoveredMonth));
 
   return <div className="app-shell">
     <header className="topbar"><div className="topbar-inner"><div className="brand"><span className="brand-icon" aria-hidden="true">◉</span><div>HOTSPOT <strong>OBSERVATORY</strong><small>Harmonized satellite fire history</small></div></div><SectionNav/></div></header>
@@ -181,11 +177,7 @@ export default function App() {
         <a className="next-section" href="#satellites">Next: Compare satellite observations</a>
       </section>
       <section id="satellites" className="page-section compact-section" aria-labelledby="satellites-title">
-        <div className="page-section-heading"><span>02</span><h2 id="satellites-title">Compare the Satellites</h2><p>Monthly daytime active cell-days · same y-axis scale · full record</p></div>
-        <div className="raw-chart-pair">{['raw_modis','raw_viirs'].map(rawMetric => <SensorChart key={rawMetric} metric={rawMetric} series={daytime} loading={dayLoading} error={dayError} maximum={rawMaximum} hoveredMonth={hoveredMonth} onHover={setHoveredMonth}/>)}</div>
-        {rawRows.length > 0 && daytime?.has_data && <label className="linked-hover-control">Hover either chart to compare the same month, or use the slider: <strong>{hoveredMonth}</strong><input type="range" aria-label="Inspect satellite month" min="0" max={rawRows.length-1} value={rawIndex} onChange={event => setHoveredMonth(monthKey(rawRows[Number(event.target.value)]))}/></label>}
-        <div className="sensor-table-wrap"><table className="sensor-comparison-table"><thead><tr><th>Sensor</th><th>Record begins</th><th>Pixel size</th><th>What it detects</th></tr></thead><tbody><tr><th>MODIS Aqua</th><td>Mid-2002</td><td>~1 km</td><td>Larger thermal signals</td></tr><tr><th>VIIRS S-NPP</th><td>2012</td><td>375 m</td><td>Catches smaller fires</td></tr></tbody></table></div>
-        <p className="sensor-caution">More VIIRS detections do not mean more fires occurred.</p><p className="footnote">Sensor record dates are shown above; this Argentina dataset begins in {meta?.start || '2003-01'}.</p>
+        <SensorComparison daytime={daytime} loading={dayLoading} error={dayError} meta={meta} bounds={bounds} regionName={regionName} retry={retry} getJSON={getJSON}/>
       </section>
       </div>
       <section id="history" className="page-section compact-section" aria-labelledby="history-title">
