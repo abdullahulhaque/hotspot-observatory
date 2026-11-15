@@ -5,6 +5,8 @@ import json
 from statistics import median
 
 import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 import pytest
 from fastapi.testclient import TestClient
@@ -115,6 +117,32 @@ def test_all_measurement_export_preserves_raw_values_and_metric_specific_complet
         assert actual['source'] == expected['source']
         assert actual['incomplete'] == str(bool(expected['incomplete_metrics']))
         assert actual['incomplete_metrics'] == ';'.join(expected['incomplete_metrics'])
+
+
+@pytest.mark.parametrize('bbox', [BBOX, '-64,-28,-59,-24', '-64,-38,-59,-33', '-71,-50,-67,-40', '-63,-27,-61,-25'])
+def test_live_regional_values_match_direct_production_parquet(live, bbox):
+    west, south, east, north = map(float, bbox.split(','))
+    dataset = ds.dataset(main.PRODUCTION, format='parquet')
+    for year, month in [(2011, 7), (2024, 7), (2026, 7)]:
+        selection = ((ds.field('lon') >= west) & (ds.field('lon') <= east)
+                     & (ds.field('lat') >= south) & (ds.field('lat') <= north)
+                     & (ds.field('year') == year) & (ds.field('month') == month) & (ds.field('daynight') == 'D'))
+        table = dataset.to_table(columns=list(main.METRICS), filter=selection)
+        key = f'{year}-{month:02}'
+        response = live.get('/series', params=dict(bbox=bbox, start=key, end=key, daynight='D'))
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload['synthetic'] is False and payload['unit'] == 'active cell-days'
+        for metric in main.METRICS:
+            if not table.num_rows:
+                # The v0.4.1 contract omits covered cells with zero activity.
+                # VIIRS before its record begins remains unavailable, never zero.
+                expected = None if metric == 'raw_viirs' and year < 2012 else 0
+                assert payload['data'][0][metric] == expected
+            elif table[metric].null_count:
+                assert payload['data'][0][metric] is None
+            else:
+                assert payload['data'][0][metric] == pytest.approx(pc.sum(table[metric]).as_py())
 
 
 def test_missing_production_never_falls_back(monkeypatch, tmp_path):
