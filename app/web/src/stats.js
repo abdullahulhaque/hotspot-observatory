@@ -139,3 +139,12 @@ export function unwrapMonths(values) {
   const mean = ((Math.atan2(y, x) / (2 * Math.PI) * 12 + 12) % 12) + 1;
   return { mean, values: values.map(v => finite(v) ? mean + ((((v - mean) % 12) + 18) % 12) - 6 : null) };
 }
+
+// The selected calendar month in the last `count` years ending at `year` (inclusive).
+// Years with no record stay in the window as unavailable entries; nothing is filled.
+export function monthWindow(sameMonth, year, count) {
+  const byYear = new Map((sameMonth || []).map(item => [item.year, item]));
+  return Array.from({ length: count }, (_, i) => year - count + 1 + i)
+    .map(y => byYear.get(y) || { year: y, value: null, source: null, incomplete: false, missing: true })
+    .filter(item => !item.missing || item.year >= Math.min(...(sameMonth || []).map(s => s.year)));
+}

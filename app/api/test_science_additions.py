@@ -116,3 +116,36 @@ def test_modelled_cells_exceeding_days_in_month_are_counted_independently(client
     assert reported['count'] == len(excess) > 0
     assert reported['max'] == max(r['harmonized'] for r in excess)
     assert reported['months'] == len({(r['year'], r['month']) for r in excess})
+
+
+@pytest.mark.parametrize('bbox,month', [(ALL, '2025-08'), ('-64,-28,-59,-24', '2024-09'), (ALL, '2026-03')])
+def test_recent_baseline_uses_the_n_most_recent_eligible_years(client, bbox, month):
+    every = client.get(f'/anomaly?bbox={bbox}&month={month}&daynight=D').json()['data'][0]['metrics']['harmonized']
+    recent = client.get(f'/anomaly?bbox={bbox}&month={month}&daynight=D&baseline=10').json()
+    stats = recent['data'][0]['metrics']['harmonized']
+    assert recent['baseline_window'] == 10
+    assert stats['baseline_years'] == every['baseline_years'][-10:]
+    assert stats['sample_size'] == min(10, every['sample_size'])
+    values = [item['value'] for item in stats['history']]
+    assert stats['historical_median'] == median(values)
+    if stats['rank'] is not None:
+        assert stats['rank'] == 1 + sum(v > stats['value'] for v in values)
+        assert stats['rank_count'] == len(values) + 1
+        assert math.isclose(stats['percent_change'], 100 * (stats['value'] - median(values)) / median(values))
+    assert stats['comparison_status'] == every['comparison_status']
+
+
+def test_same_month_series_matches_the_regional_series(client):
+    anomaly = client.get(f'/anomaly?bbox={ALL}&month=2024-07&daynight=D').json()['data'][0]
+    series = client.get(f'/series?bbox={ALL}&start=2003-01&end=2024-12&daynight=D').json()['data']
+    july = [r for r in series if r['month'] == 7]
+    assert [r['year'] for r in anomaly['same_month']] == [r['year'] for r in july]
+    for item, row in zip(anomaly['same_month'], july):
+        assert item['value'] == row['harmonized'] and item['source'] == row['source']
+        assert item['incomplete'] == ('harmonized' in row['incomplete_metrics'])
+    assert anomaly['same_month'][-1]['source'] == 'gapfill'
+
+
+@pytest.mark.parametrize('value', ['0', '2', '51', 'ten', '-5'])
+def test_invalid_baseline_is_rejected(client, value):
+    assert client.get(f'/anomaly?bbox={ALL}&month=2024-07&daynight=D&baseline={value}').status_code == 422

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { CIVIDIS } from './heatScale.js';
+import { MAP_RAMP } from './heatScale.js';
 
 function polygon(bounds) {
   const [w, s, east, n] = bounds;
@@ -18,7 +18,8 @@ export function cellFeatures(cells, maximum) {
     properties: { v: value, p: Math.sqrt(Math.min(1, value / maximum)), s: source },
     geometry: { type: 'Polygon', coordinates: [[[lon - .05, lat - .05], [lon + .05, lat - .05], [lon + .05, lat + .05], [lon - .05, lat + .05], [lon - .05, lat - .05]]] } })) };
 }
-const RAMP = ['interpolate', ['linear'], ['get', 'p'], ...CIVIDIS.flatMap((color, i) => [i / (CIVIDIS.length - 1), color])];
+const RAMP = ['interpolate', ['linear'], ['get', 'p'], ...MAP_RAMP.flatMap((color, i) => [i / (MAP_RAMP.length - 1), color])];
+
 // Below zoom 6 a 0.1° square is under a pixel wide, so cells are also drawn as dots
 // whose size grows with zoom; from zoom 6 the true cell squares take over.
 export function cellPoints(cells, maximum) {
@@ -42,12 +43,14 @@ export default function Map({ bounds, onSelect, coverage, grid }) {
     try {
       instance = new maplibregl.Map({
         container: container.current, bounds: [[bounds[0], bounds[1]], [bounds[2], bounds[3]]],
-        fitBoundsOptions: { padding: { top: 76, bottom: 76, left: 30, right: 30 } }, maxZoom: 14,
+        fitBoundsOptions: { padding: { top: 76, bottom: 76, left: 30, right: 30 } }, maxZoom: 14, renderWorldCopies: false,
+        // Draw one copy of the world. maxBounds and minZoom are avoided: on narrow screens they
+        // stop the map fitting Argentina, and the resize refit then keeps re-rendering.
         // A local style still renders the selection if the optional basemap is offline.
         style: { version: 8, sources: { basemap: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 19,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' } },
           layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#E6EAED' } },
-            { id: 'basemap', type: 'raster', source: 'basemap', paint: { 'raster-saturation': -1, 'raster-opacity': 0.55, 'raster-contrast': -0.2, 'raster-fade-duration': 0 } }] },
+            { id: 'basemap', type: 'raster', source: 'basemap', paint: { 'raster-saturation': -1, 'raster-opacity': 0.8, 'raster-contrast': 0.1, 'raster-fade-duration': 0 } }] },
       });
     } catch {
       setNotice('Map unavailable. Select your region with the latitude / longitude inputs.');
@@ -71,14 +74,15 @@ export default function Map({ bounds, onSelect, coverage, grid }) {
         const mask = { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [world, ...polygons.map(p => p[0])] } };
         instance.addSource('coverage', { type: 'geojson', data: boundary });
         instance.addSource('coverage-mask', { type: 'geojson', data: mask });
-        instance.addLayer({ id: 'outside-coverage', type: 'fill', source: 'coverage-mask', paint: { 'fill-color': '#DDE2E6', 'fill-opacity': .82 } });
-        instance.addLayer({ id: 'coverage-outline', type: 'line', source: 'coverage', paint: { 'line-color': '#4C5866', 'line-width': 1.2 } });
+        // A light tint marks areas without data while keeping neighbouring borders and names readable.
+        instance.addLayer({ id: 'outside-coverage', type: 'fill', source: 'coverage-mask', paint: { 'fill-color': '#B9C2CA', 'fill-opacity': .38 } });
+        instance.addLayer({ id: 'coverage-outline', type: 'line', source: 'coverage', paint: { 'line-color': '#16222E', 'line-width': 1.8 } });
       }
       instance.addSource('activity', { type: 'geojson', data: cellFeatures(gridRef.current?.cells, gridRef.current?.max) });
       instance.addSource('activity-points', { type: 'geojson', data: cellPoints(gridRef.current?.cells, gridRef.current?.max) });
       instance.addLayer({ id: 'activity', type: 'fill', source: 'activity', minzoom: 6, paint: { 'fill-color': RAMP, 'fill-opacity': 0.92, 'fill-antialias': false } }, boundary ? 'outside-coverage' : undefined);
       instance.addLayer({ id: 'activity-points', type: 'circle', source: 'activity-points', maxzoom: 6, paint: { 'circle-color': RAMP, 'circle-opacity': 0.9,
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 1.1, 4, 1.8, 5, 2.6, 6, 4] } }, boundary ? 'outside-coverage' : undefined);
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 1.2, 4, 2, 5, 2.8, 6, 4] } }, boundary ? 'outside-coverage' : undefined);
       for (const layer of ['activity', 'activity-points']) {
         instance.on('mousemove', layer, event => { const f = event.features?.[0]; if (f) setHovered({ v: f.properties.v, s: f.properties.s, lon: f.geometry.type === 'Point' ? f.geometry.coordinates[0] : event.lngLat.lng, lat: f.geometry.type === 'Point' ? f.geometry.coordinates[1] : event.lngLat.lat }); });
         instance.on('mouseleave', layer, () => setHovered(null));
@@ -160,7 +164,7 @@ export default function Map({ bounds, onSelect, coverage, grid }) {
     <div className="map-toolbar"><span className="map-tag">Argentina coverage</span>
       <button className={drawing ? 'draw active' : 'draw'} onClick={() => setDrawing(value => !value)} aria-pressed={drawing}>
         <span aria-hidden="true">▧</span> {drawing ? 'Cancel drawing' : 'Select area on map'}</button></div>
-    <div className={`map-caption${drawing || hovered ? ' active' : ''}`} aria-live="polite">{drawing ? 'Drag to select a rectangle · Esc to cancel' : hovered ? <span>{hovered.v.toLocaleString('en', { maximumFractionDigits: 1 })} active cell-days in the cell near {Math.abs(hovered.lat).toFixed(2)}° S, {Math.abs(hovered.lon).toFixed(2)}° W{hovered.s !== 'observed' ? ` · ${hovered.s === 'backcast' ? 'back-cast' : 'gap-filled'} estimate` : ''}</span> : <><span className="coverage-key">Argentina data coverage</span><span className="selection-key">Selected bounding box</span><span>Outside coverage dimmed</span></>}</div>
+    <div className={`map-caption${drawing || hovered ? ' active' : ''}`} aria-live="polite">{drawing ? 'Drag to select a rectangle · Esc to cancel' : hovered ? <span>{hovered.v.toLocaleString('en', { maximumFractionDigits: 1 })} active cell-days in the cell near {Math.abs(hovered.lat).toFixed(2)}° S, {Math.abs(hovered.lon).toFixed(2)}° W{hovered.s !== 'observed' ? ` · ${hovered.s === 'backcast' ? 'back-cast' : 'gap-filled'} estimate` : ''}</span> : <><span className="coverage-key">Argentina data coverage</span><span className="selection-key">Selected bounding box</span><span className="no-data-key">Outside Argentina: no data</span></>}</div>
     {notice && <div className="map-notice" role="status">{notice}</div>}
   </div>;
 }

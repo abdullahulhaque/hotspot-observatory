@@ -93,3 +93,16 @@ test('unwrapping months keeps December–January neighbours continuous', async (
   close(plain.mean, 9, 1e-9); assert.deepEqual(plain.values.map(v => Math.round(v * 1e9) / 1e9), [8, 9, 10]);
   assert.equal(unwrapMonths([null]).mean, null);
 });
+
+test('month window ends at the selected year and never invents earlier records', async () => {
+  const { monthWindow } = await import('./stats.js');
+  const rows = [2018, 2019, 2020, 2021, 2022].map(year => ({ year, value: year - 2000, source: 'observed', incomplete: year === 2020 }));
+  assert.deepEqual(monthWindow(rows, 2022, 3).map(r => r.year), [2020, 2021, 2022]);
+  assert.equal(monthWindow(rows, 2022, 3)[0].incomplete, true);
+  // A window longer than the record starts at the first available year.
+  assert.deepEqual(monthWindow(rows, 2022, 10).map(r => r.year), [2018, 2019, 2020, 2021, 2022]);
+  // A gap inside the record stays as an unavailable entry.
+  const gap = rows.filter(r => r.year !== 2021);
+  const window = monthWindow(gap, 2022, 3);
+  assert.equal(window[1].year, 2021); assert.equal(window[1].value, null);
+});

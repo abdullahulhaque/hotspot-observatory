@@ -392,8 +392,13 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
                 "has_data": data.has_area(tuple(bounds)), "interval": band, "data": rows}
 
     @api.get("/anomaly")
-    def anomaly(bbox: str, month: str, daynight: str = ""):
+    def anomaly(bbox: str, month: str, daynight: str = "", baseline: str = "all"):
         bounds, (year, selected_month), selected = parse_bbox(bbox), parse_month(month), periods(daynight)
+        # "all": every earlier eligible year. An integer N: the N most recent earlier
+        # eligible years, so the window stays N records long when a month is excluded.
+        if baseline != "all" and not (baseline.isdigit() and 3 <= int(baseline) <= 50):
+            raise HTTPException(422, "baseline must be 'all' or a whole number of years from 3 to 50.")
+        window = None if baseline == "all" else int(baseline)
         data = store()
         years = [y for y in data.years if y < year]
         dates = [(y, selected_month) for y in years] + [(year, selected_month)]
@@ -405,22 +410,28 @@ def create_app(data_path: str | Path | None = None, national_path: Path = NATION
             metrics = {}
             for metric in METRICS:
                 history = [r for r in records if r["year"] < year and r["daynight"] == period and r[metric] is not None and metric not in r["incomplete_metrics"]]
-                baseline = median(r[metric] for r in history) if history else None
+                if window is not None:
+                    history = history[-window:]
+                baseline_median = median(r[metric] for r in history) if history else None
                 value = current[metric]
                 eligible = value is not None and metric not in current["incomplete_metrics"] and current["quality_available"]
-                difference = value - baseline if eligible and baseline is not None else None
-                metrics[metric] = {"value": value, "historical_median": baseline, "difference": difference,
-                                   "percent_change": 100 * difference / baseline if difference is not None and baseline else None,
+                difference = value - baseline_median if eligible and baseline_median is not None else None
+                metrics[metric] = {"value": value, "historical_median": baseline_median, "difference": difference,
+                                   "percent_change": 100 * difference / baseline_median if difference is not None and baseline_median else None,
                                    "baseline_years": [r["year"] for r in history], "sample_size": len(history),
                                    "history": [{"year": r["year"], "value": r[metric], "source": r["source"]} for r in history],
                                    "rank": 1 + sum(r[metric] > value for r in history) if eligible else None,
                                    "rank_count": len(history) + 1 if eligible else 0,
                                    "rank_tied": any(r[metric] == value for r in history) if eligible else False,
                                    "comparison_status": "incomplete" if metric in current["incomplete_metrics"] else "quality_unavailable" if not current["quality_available"] else "available"}
-            result.append({**{key: value for key, value in current.items() if key not in METRICS}, "metrics": metrics})
-        return {**data.provenance(), "bbox": bounds, "month": month,
-                "metric": "harmonized", "interval": band,
-                "baseline": "Same calendar month in available earlier years; incomplete observations and target year excluded.", "data": result}
+            # Every year's value for this calendar month, with quality flags, for comparison charts.
+            same_month = [{"year": r["year"], "value": r["harmonized"], "source": r["source"], "gap_flag": r["gap_flag"], "nrt": r["nrt"],
+                           "incomplete": "harmonized" in r["incomplete_metrics"]} for r in records if r["daynight"] == period]
+            result.append({**{key: value for key, value in current.items() if key not in METRICS}, "metrics": metrics, "same_month": same_month})
+        description = ("Same calendar month in available earlier years; incomplete observations and target year excluded." if window is None else
+                       f"Same calendar month in the {window} most recent earlier years with eligible values; incomplete observations and target year excluded.")
+        return {**data.provenance(), "bbox": bounds, "month": month, "baseline_window": window,
+                "metric": "harmonized", "interval": band, "baseline": description, "data": result}
 
     @api.get("/grid")
     def grid(month: str, daynight: str = "D", metric: str = "harmonized"):

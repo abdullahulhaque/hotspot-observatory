@@ -139,3 +139,40 @@ test('limitations are generated from metadata and the overpass diagnostics', asy
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
 });
+
+test('unit notes, same-month comparison and recent baseline trace to the API', async ({ page, request }) => {
+  await page.goto('/?month=2020-08');
+  // 1. Every headline number has the unit definition beside it.
+  const notes = page.locator('.unit-note');
+  await expect(notes).toHaveCount(3);
+  await expect(page.locator('.controls .unit-note summary')).toHaveText('Active cell-days: satellite-detected fire activity, not a fire count or burned area');
+  await page.locator('.inspector .unit-note summary').click();
+  await expect(page.locator('.inspector .unit-note-body')).toContainText('One active cell-day is one 0.1° grid cell');
+  // 2. The selected month across the last N years, read from /anomaly same_month.
+  const all = await (await request.get('/api/anomaly?bbox=-74,-56,-53,-21&month=2020-08&daynight=D')).json();
+  const sameMonth = all.data[0].same_month;
+  const chart = page.locator('.same-month');
+  await expect(chart.locator('.same-month-title')).toHaveText('Aug in the last 10 years');
+  await expect(chart.locator('.same-month-bar')).toHaveCount(10);
+  await expect(chart.locator('.same-month-bar.selected')).toHaveCount(1);
+  const label = await chart.locator('svg').getAttribute('aria-label');
+  for (const item of sameMonth.filter(r => r.year > 2010)) expect(label).toContain(`${item.year}: ${fmt(item.value)} active cell-days`);
+  await chart.getByRole('button', { name: '20', exact: true }).click();
+  await expect(chart.locator('.same-month-bar')).toHaveCount(18); // record starts in 2003
+  await expect(chart.locator('.same-month-bar.estimate')).toHaveCount(9); // 2003–2011 back-cast
+  // 3. Recent baseline: medians and ranks come from the API's baseline=10 computation.
+  const recent = await (await request.get('/api/anomaly?bbox=-74,-56,-53,-21&month=2020-08&daynight=D&baseline=10')).json();
+  const stats = recent.data[0].metrics.harmonized;
+  const loaded = page.waitForResponse(r => r.url().includes('/anomaly?') && new URL(r.url()).searchParams.get('baseline') === '10');
+  await page.getByRole('button', { name: 'Most recent 10 years', exact: true }).click();
+  await loaded;
+  await expect(page.locator('.comparison strong').nth(1)).toHaveText(fmt(stats.historical_median));
+  await expect(page.locator('.anomaly-rank')).toContainText(`${stats.rank} of ${stats.rank_count}`);
+  await expect(page.locator('.baseline-definition')).toContainText('the 10 most recent with eligible values');
+  const estimates = stats.history.filter(h => h.source !== 'observed').length;
+  await expect(page.locator('.baseline-definition')).toContainText(estimates ? `${estimates} of them ${estimates === 1 ? 'is a model estimate' : 'are model estimates'}` : 'All are observed VIIRS values.');
+  await expect(page).toHaveURL(/baseline=10/);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Most recent 10 years', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.comparison strong').nth(1)).toHaveText(fmt(stats.historical_median));
+});

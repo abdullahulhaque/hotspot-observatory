@@ -13,8 +13,9 @@ import Timeline from './Timeline.jsx';
 import Inspector from './Inspector.jsx';
 import CalendarPanel from './CalendarPanel.jsx';
 import { RegionalComparison, TimingTrend } from './Analyses.jsx';
-import { CIVIDIS, legendTicks } from './heatScale.js';
+import { MAP_RAMP, legendTicks } from './heatScale.js';
 import { withSelection } from './exportCsv.js';
+import UnitNote from './UnitNote.jsx';
 
 const API = import.meta.env.VITE_API_BASE || '/api';
 const LABELS = { raw_modis: 'MODIS Aqua', raw_viirs: 'VIIRS Suomi-NPP', harmonized: 'Harmonized' };
@@ -52,6 +53,7 @@ function readUrl() {
     start: MONTH.test(p.get('start') || '') ? p.get('start') : '', end: MONTH.test(p.get('end') || '') ? p.get('end') : '',
     month: MONTH.test(p.get('month') || '') ? p.get('month') : '', period: pick('period', ['D', 'N'], 'D'),
     mode: series === 'harmonized' ? 'harmonized' : 'raw', sensor: series === 'harmonized' ? 'raw_modis' : series,
+    baseline: pick('baseline', ['all', '10'], 'all'),
   };
 }
 
@@ -75,7 +77,7 @@ export default function App() {
   const [meta, setMeta] = useState(null), [error, setError] = useState('');
   const [bounds, setBounds] = useState(initial.bounds), [inputs, setInputs] = useState(initial.bounds.map(String));
   const [start, setStart] = useState(initial.start), [end, setEnd] = useState(initial.end), [period, setPeriod] = useState(initial.period);
-  const [mode, setMode] = useState(initial.mode), [sensor, setSensor] = useState(initial.sensor);
+  const [mode, setMode] = useState(initial.mode), [sensor, setSensor] = useState(initial.sensor), [baseline, setBaseline] = useState(initial.baseline);
   const [selected, setSelected] = useState(initial.month), [series, setSeries] = useState(null), [anomaly, setAnomaly] = useState(null);
   const [loading, setLoading] = useState(true), [anomalyError, setAnomalyError] = useState(''), [formError, setFormError] = useState('');
   const [retry, setRetry] = useState(0), [downloading, setDownloading] = useState(false), [copied, setCopied] = useState(false);
@@ -108,10 +110,10 @@ export default function App() {
   // Keep the URL in step with the analysis state (no history entries for every change).
   useEffect(() => {
     if (!meta) return;
-    const p = new URLSearchParams({ view, tab, bbox: bounds.join(','), start, end, month: selected, period, series: metric });
+    const p = new URLSearchParams({ view, tab, bbox: bounds.join(','), start, end, month: selected, period, series: metric, baseline });
     window.history.replaceState(null, '', `${window.location.pathname}?${p}`);
     setCopied(false);
-  }, [meta, view, tab, bounds, start, end, selected, period, metric]);
+  }, [meta, view, tab, bounds, start, end, selected, period, metric, baseline]);
 
   useEffect(() => {
     if (!meta) return;
@@ -132,10 +134,10 @@ export default function App() {
     if (!meta || !selected) return;
     const controller = new AbortController();
     setAnomaly(null); setAnomalyError('');
-    const params = new URLSearchParams({ bbox: bounds.join(','), month: selected, daynight: period });
+    const params = new URLSearchParams({ bbox: bounds.join(','), month: selected, daynight: period, baseline });
     getJSON(`/anomaly?${params}`, controller.signal).then(setAnomaly).catch(err => { if (err.name !== 'AbortError') setAnomalyError(err.message); });
     return () => controller.abort();
-  }, [meta, bounds, selected, period, retry]);
+  }, [meta, bounds, selected, period, baseline, retry]);
 
   useEffect(() => {
     if (!meta || !selected) return;
@@ -263,6 +265,7 @@ export default function App() {
           <h2 className="control-title">Time window</h2>
           <div className="date-grid"><label>From<input type="month" aria-label="Start month" value={start} onChange={event => setStart(event.target.value)} /></label><label>To<input type="month" aria-label="End month" max={meta?.end} value={end} onChange={event => setEnd(event.target.value)} /></label></div>
           <div className="summary"><strong>{noData ? 'No data in this area' : format(total)}</strong><span>active cell-days · {available.length} available months · {LABELS[metric]}</span></div>
+          <UnitNote compact/>
           {available.some(row => row.incomplete_metrics?.includes(metric)) && <p className="footnote quality-notice">This total includes incomplete observations; it can undercount activity. Inspect the ! months in the calendar.</p>}
           {available.some(row => row.nrt) && <p className="footnote">NRT months are provisional and may change on refresh.</p>}
         </section>
@@ -279,8 +282,9 @@ export default function App() {
           <div className="pane-head"><h2 id="map-title" className="pane-title">{LABELS[metric]} active cell-days per 0.1° cell, {monthLabel(selected)}, {periodName.toLowerCase()}</h2>
             <span className="map-stats">{grid?.available ? <>{format(grid.count)} active cells · {format(grid.total)} cell-days nationally{grid.source && grid.source !== 'observed' ? ` · ${grid.source === 'backcast' ? 'back-cast' : 'gap-filled'} estimate: cells follow the MODIS footprint` : ''}{grid.nrt ? ' · provisional NRT' : ''}{grid.gap_flag ? ' · sensor gap flagged' : ''}</> : ''}</span></div>
           <div className="map-container">{meta ? <RegionMap bounds={bounds} onSelect={applyBounds} coverage={meta.coverage} grid={grid}/> : <div className="map-shell empty">Loading Argentina coverage…</div>}</div>
+          <div className="map-unit"><UnitNote compact/></div>
           <div className="map-legend">
-            {grid?.available && grid.count > 0 ? <div className="heat-scale" aria-label="Map colour scale"><span>Active cell-days in one 0.1° cell · square-root cividis scale</span><div className="heat-ramp" style={{ background: `linear-gradient(to right, ${CIVIDIS.join(',')})` }}/><div className="heat-ticks">{legendTicks(grid.max).map(tick => <span key={tick.position} style={{ left: `${tick.position * 100}%` }}>{format(tick.value)}</span>)}</div></div>
+            {grid?.available && grid.count > 0 ? <div className="heat-scale" aria-label="Map colour scale"><span>Active cell-days in one 0.1° cell · square-root scale</span><div className="heat-ramp" style={{ background: `linear-gradient(to right, ${MAP_RAMP.join(',')})` }}/><div className="heat-ticks">{legendTicks(grid.max).map(tick => <span key={tick.position} style={{ left: `${tick.position * 100}%` }}>{format(tick.value)}</span>)}</div></div>
               : <p className="muted">{gridError || (grid && !grid.available ? `${LABELS[metric]} values are unavailable for ${monthLabel(selected)} (${periodName.toLowerCase()}); missing is not zero.` : grid ? 'No active cells this month.' : 'Loading map layer…')}</p>}
             <p className="figure-caption"><span><b>Source</b> Harmonized Parquet cells (/grid), {LABELS[metric]}</span><span><b>Period</b> {selected || '…'}, {periodName.toLowerCase()} overpasses</span></p>
           </div>
@@ -300,7 +304,7 @@ export default function App() {
       </main>
 
       <aside className="inspector" aria-label="Selected month">
-        <Inspector anomaly={anomaly} anomalyError={anomalyError} selected={selected} period={period} regionName={regionName} noData={noData}/>
+        <Inspector anomaly={anomaly} anomalyError={anomalyError} selected={selected} period={period} regionName={regionName} noData={noData} baseline={baseline} onBaseline={setBaseline}/>
       </aside>
     </div>}
 

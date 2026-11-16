@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Figure, { SERIES, fmtNumber, monthName } from './Figure.jsx';
-import { anomalyClass, ANOMALY_CLASSES, climatology, MIN_BASELINE, seasonalTiming, trendTest, unwrapMonths } from './stats.js';
+import { anomalyClass, ANOMALY_CLASSES, climatology, MIN_BASELINE, monthWindow, seasonalTiming, trendTest, unwrapMonths } from './stats.js';
 
 function useWidth(initial, minimum = 280) {
   const ref = useRef(null), [width, setWidth] = useState(initial);
@@ -143,5 +143,42 @@ export function AnomalyContext({ stats, monthLabel: label, blocked }) {
     <p className="anomaly-class" data-status={result.status}>{result.status === 'ready' ? <><strong>{result.label}</strong>: {fmtNumber(result.percentile, 0)}th percentile of {result.n} earlier {label} records ({result.rule}).</> : result.status === 'insufficient' ? `Screening class needs at least ${MIN_BASELINE} earlier records; ${result.n} available.` : result.status === 'withheld' ? 'Screening class withheld with the comparison.' : 'Screening class unavailable.'}</p>
     <details className="anomaly-rules"><summary>How months are classed</summary><ul>{ANOMALY_CLASSES.map(c => <li key={c.label}><b>{c.label}</b>: {c.rule}</li>)}</ul><p>Percentiles use mid-ranks among earlier same-month values (ties count half). Back-cast and gap-filled values are included and drawn as open circles.</p></details>
     <p className="anomaly-disclaimer">An anomaly is a signal to investigate, not a prediction that a wildfire will occur.</p>
+  </div>;
+}
+
+// The selected calendar month in each of the last N years, ending at the selected year.
+// Bars are values from /anomaly (same_month); the dashed line is the inspector's baseline median.
+export function SameMonthChart({ sameMonth, year, monthLabel: label, median, baselineLabel, count, onCount }) {
+  const [ref, width] = useWidth(300, 220);
+  const rows = monthWindow(sameMonth, year, count);
+  const values = rows.map(r => r.value).filter(v => v != null);
+  const W = width, H = 150, L = 40, R = 6, T = 14, B = 24;
+  const max = Math.max(1, median || 0, ...values) * 1.1;
+  const step = (W - L - R) / Math.max(1, rows.length);
+  const y = v => H - B - v / max * (H - T - B);
+  const labelEvery = rows.length > 12 ? 5 : rows.length > 6 ? 2 : 1;
+  const kind = r => r.value == null ? 'missing' : r.year === year ? 'selected' : r.incomplete ? 'incomplete' : r.source && r.source !== 'observed' ? 'estimate' : 'observed';
+  const describe = r => `${r.year}: ${r.value == null ? 'unavailable' : `${fmtNumber(r.value)} active cell-days`}${r.source && r.source !== 'observed' ? `, ${r.source === 'backcast' ? 'back-cast' : 'gap-filled'} estimate` : ''}${r.incomplete ? ', incomplete observations' : ''}${r.nrt ? ', provisional' : ''}`;
+  return <div className="same-month" ref={ref}>
+    <div className="same-month-head"><h3 className="same-month-title">{label} in the last {count} years</h3>
+      <div className="segmented" role="group" aria-label="Years to compare">{[5, 10, 20].map(n => <button key={n} aria-pressed={count === n} onClick={() => onCount(n)}>{n}</button>)}</div></div>
+    {!rows.length ? <p className="muted">No earlier records for this month.</p> : <>
+      <svg className="chart same-month-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${label}, harmonized active cell-days by year: ${rows.map(describe).join('; ')}`}>
+        <line className="gridline" x1={L} x2={W - R} y1={y(max / 1.1)} y2={y(max / 1.1)}/>
+        <text className="tick" x={L - 5} y={y(max / 1.1) + 4} textAnchor="end">{new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(max / 1.1)}</text>
+        <text className="tick" x={L - 5} y={H - B + 4} textAnchor="end">0</text>
+        <line className="axis-line" x1={L} x2={W - R} y1={H - B} y2={H - B}/>
+        {rows.map((r, i) => { const x = L + i * step + step * .15, w = Math.max(2, step * .7), k = kind(r); return <g key={r.year} className={`same-month-bar ${k}`}>
+          <title>{describe(r)}</title>
+          {r.value == null ? <text className="tick" x={x + w / 2} y={H - B - 4} textAnchor="middle">n/a</text> : <rect x={x} width={w} y={y(r.value)} height={Math.max(.5, H - B - y(r.value))}/>}
+          {((i % labelEvery === 0 && !(labelEvery > 1 && Math.abs(r.year - year) < labelEvery)) || r.year === year) && <text className={`tick${r.year === year ? ' strong' : ''}`} x={x + w / 2} y={H - 8} textAnchor="middle">{rows.length > 10 ? `'${String(r.year).slice(2)}` : r.year}</text>}
+        </g>; })}
+        {median != null && <g className="same-month-median"><line x1={L} x2={W - R} y1={y(median)} y2={y(median)}/><text x={W - R} y={y(median) - 4} textAnchor="end">median {fmtNumber(median, 0)}</text></g>}
+      </svg>
+      <div className="chart-key"><span><i className="key-swatch" style={{ background: SERIES.harmonized }}/>Selected</span><span><i className="key-swatch" style={{ background: SERIES.viirs }}/>Observed</span><span><i className="key-swatch estimate"/>Model estimate</span><span><i className="key-swatch incomplete"/>Incomplete</span></div>
+      <p className="footnote">Dashed line: {baselineLabel}. Harmonized values, active cell-days. Incomplete months are shown but excluded from the median and rank.</p>
+      <details className="figure-data"><summary>Values</summary><div className="table-scroll"><table><thead><tr><th scope="col">Year</th><th scope="col">Active cell-days</th><th scope="col">Provenance</th></tr></thead>
+        <tbody>{rows.map(r => <tr key={r.year}><th scope="row">{r.year}</th><td>{fmtNumber(r.value)}</td><td>{r.value == null ? 'Unavailable' : `${r.source === 'backcast' ? 'Back-cast estimate' : r.source === 'gapfill' ? 'Gap-filled estimate' : 'Observed'}${r.incomplete ? ' · Incomplete' : ''}${r.nrt ? ' · Provisional' : ''}`}</td></tr>)}</tbody></table></div></details>
+    </>}
   </div>;
 }
