@@ -1,0 +1,62 @@
+<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet"><style>
+@page{size:1280px 720px;margin:0}*{box-sizing:border-box}body{margin:0;font-family:'Public Sans',sans-serif;color:#16222E}
+.s{width:1280px;height:720px;page-break-after:always;padding:52px 64px;background:#EEF1F2;display:flex;flex-direction:column;position:relative;overflow:hidden}
+h1{font-family:'Source Serif 4',serif;font-size:58px;line-height:1.05;margin:0}h2{font-family:'Source Serif 4',serif;font-size:40px;margin:0 0 18px;line-height:1.15}
+.k{font-size:17px;color:#1D5C8C;font-weight:700;margin-bottom:10px}p,li{font-size:22px;line-height:1.45}ul{margin:0;padding-left:26px}li{margin:6px 0}
+.row{display:flex;gap:36px;flex:1;min-height:0}.row>div{flex:1;min-width:0}.img{width:100%;border:1px solid #CBD3D9;border-radius:4px;background:#fff;object-fit:contain}
+.big{font-family:'Source Serif 4',serif;font-size:64px;font-weight:600;line-height:1}.stat{margin:12px 0}.stat small{display:block;font-size:17px;color:#4C5866}
+.foot{position:absolute;bottom:22px;left:64px;right:64px;font-size:14px;color:#4C5866;display:flex;justify-content:space-between}
+.tag{display:inline-block;background:#fff;border:1px solid #CBD3D9;border-radius:3px;padding:4px 10px;font-size:16px;margin:4px 6px 0 0}
+.u{background:#fff;border-top:3px solid #16222E;padding:14px 16px;flex:1}.u h3{margin:0 0 6px;font-size:21px}.u p{font-size:18px;margin:0}
+</style></head><body>
+<section class="s"><div class="row"><div style="flex:.9;display:flex;flex-direction:column;justify-content:center">
+<div class="k">NASA Space Apps Challenge 2026 · Chicago</div><h1>Hotspot Observatory</h1>
+<p style="font-size:26px;margin:16px 0 22px">One consistent fire record for Argentina from two NASA satellites, 2003–2026.</p>
+<p style="font-size:19px"><b>Team:</b> [TEAM NAME]<br><b>Members:</b> [MEMBER NAMES]<br><b>Challenge:</b> [CHALLENGE TITLE]</p></div>
+<div style="flex:1.1;display:flex;align-items:center"><img class="img" src="img/workspace.png"></div></div>
+<div class="foot"><span>Data: NASA FIRMS MODIS C6.1 and VIIRS 375 m active fire</span><span>1 / 7</span></div></section>
+
+<section class="s"><div class="k">The problem</div><h2>Switching satellites creates a fire increase that never happened</h2>
+<div class="row"><div style="flex:.8"><ul><li><b>MODIS</b> (since 2002, 1 km pixels) misses fires that <b>VIIRS</b> (since 2012, 375 m) sees.</li><li>VIIRS records <b>2.75×</b> as many active fire cells over Argentina.</li><li>Joining the raw records makes activity jump <b>2.24×</b> in 2012.</li><li>Every trend, anomaly and season comparison across 2012 is wrong.</li></ul></div>
+<div style="flex:1.2"><img class="img" style="max-height:520px" src="img/figure1.png"></div></div>
+<div class="foot"><span>Annual daytime totals, Argentina, NASA FIRMS</span><span>2 / 7</span></div></section>
+
+<section class="s"><div class="k">Our solution</div><h2>A harmonized record, and a tool to explore it</h2>
+<div class="row"><div style="flex:.75"><ul><li>One monthly fire record for Argentina, <b>Jan 2003 – Oct 2026</b>, on the VIIRS scale, at 0.1° resolution.</li><li>Pick any area, step through 286 months on the map and timeline.</li><li>Calendar, seasons, trends, regions and a month-by-month anomaly inspector.</li><li>Every value labelled observed or estimated, with uncertainty; export and shareable links.</li></ul></div>
+<div style="flex:1.25"><img class="img" style="max-height:540px" src="img/map.png"></div></div>
+<div class="foot"><span>Gran Chaco, August 2020: active 0.1° cells and monthly timeline</span><span>3 / 7</span></div></section>
+
+<section class="s"><div class="k">How NASA data makes it possible</div><h2>Harmonization as a tested experiment</h2>
+<div class="row"><div><ul>
+<li><b>Data:</b> NASA FIRMS MODIS (Aqua) and VIIRS (Suomi-NPP) detections, 2003–2026.</li>
+<li><b>Common unit:</b> active 0.1° cell-days, which removes most of the pixel-size difference.</li>
+<li><b>Four competing models</b> fitted on 2012–2019, when both satellites flew.</li>
+<li><b>Held-out test</b> on 2020–2025; the power-law model chosen.</li>
+<li><b>Build:</b> observed VIIRS wherever it exists; MODIS converted only for 2003–2011 and satellite outages, which are confirmed before filling.</li></ul></div>
+<div><img class="img" style="max-height:500px" src="img/models.png"></div></div>
+<div class="foot"><span>log(1+VIIRS) = 1.6622 + 0.91414 · log(1+MODIS)</span><span>4 / 7</span></div></section>
+
+<section class="s"><div class="k">Validation</div><h2>Tested on years it never saw</h2>
+<div class="row"><div style="flex:.6">
+<div class="stat"><span class="big">66% → 12%</span><small>monthly error against VIIRS, raw MODIS vs calibrated, 2020–2025</small></div>
+<div class="stat"><span class="big">0.97</span><small>monthly R² on held-out months</small></div>
+<div class="stat"><span class="big">+0.04%</span><small>2012 seam: observed VIIRS vs model</small></div>
+<p style="font-size:17px">Measured honestly: 80% intervals covered 70% of months; limits shown in the tool.</p></div>
+<div style="flex:1.4"><img class="img" style="max-height:540px" src="img/heldout.png"></div></div>
+<div class="foot"><span>National daytime active cell-days; VIIRS is the reference instrument</span><span>5 / 7</span></div></section>
+
+<section class="s"><div class="k">Who it helps</div><h2>Three users, three questions answered</h2>
+<div class="row" style="flex:none;gap:18px;margin-bottom:18px">
+<div class="u"><h3>Fire-season analysis</h3><p>Researchers and agencies: when does fire peak? Patagonia peaks in <b>February</b>, the north in <b>August</b>.</p></div>
+<div class="u"><h3>Anomaly detection</h3><p>Monitoring teams: is this month unusual? Aug 2020 was <b>+58%</b> above the median, <b>2nd of 18</b> Augusts.</p></div>
+<div class="u"><h3>Regional risk research</h3><p>Fire managers and modellers: where and when to focus, exported with full provenance.</p></div></div>
+<div class="row"><div><img class="img" style="max-height:330px" src="img/regions.png"></div><div style="flex:.55"><img class="img" style="max-height:330px" src="img/inspector.png"></div></div>
+<div class="foot"><span>An anomaly is a signal to investigate, not a prediction of fire</span><span>6 / 7</span></div></section>
+
+<section class="s"><div class="k">Impact and what comes next</div><h2>A trustworthy fire history, built to grow</h2>
+<div class="row"><div><p><b>Impact:</b> one consistent, validated record lets Argentina compare any fire season since 2003 on equal terms, flag unusual months, and feed fire-risk work, with every limitation shown openly.</p>
+<p style="margin-top:20px"><b>Next steps</b></p><ul><li>Regional validation and a drift-aware recalibration</li><li>Province-level areas and automated monthly updates</li><li>Extend to other countries, each with its own validation</li></ul></div>
+<div style="flex:.8;display:flex;flex-direction:column;justify-content:center"><img class="img" src="img/mape.png">
+<p style="font-size:15px;color:#4C5866;margin-top:16px">Code generated with AI coding assistants (OpenAI Codex, Claude) under our team's direction; approach and use cases by our team.</p></div></div>
+<div class="foot"><span>Hotspot Observatory · NASA Space Apps Challenge 2026</span><span>7 / 7</span></div></section>
+</body></html>
